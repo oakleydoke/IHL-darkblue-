@@ -1,0 +1,7 @@
+{
+  "name": "I Have Landed - Premium Scholar Connectivity",
+  "description": "Global 5G data eSIMs exclusively for international students. No SSN, instant delivery, tier-1 networks.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
