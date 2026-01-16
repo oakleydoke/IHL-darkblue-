@@ -3,15 +3,21 @@ import { ENV } from '../config';
 
 export class ApiService {
   protected static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
-    if (ENV.USE_MOCKS) {
-      console.debug(`[MOCK-MODE] Bypassing real network for: ${endpoint}`);
+    // If we're in a local preview or forced mock mode, don't attempt real network calls
+    if (ENV.USE_MOCKS || !ENV.STRIPE_PUBLIC_KEY) {
+      console.debug(`[MOCK-MODE] Bypassing network for: ${endpoint}`);
       return null;
     }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), ENV.API_TIMEOUT);
     
-    const API_KEY = 'EA_PROD_9921_SECRET'; 
+    // Attempt to get the eSIM API key from various env locations
+    const meta = import.meta as any;
+    const API_KEY = (meta.env && meta.env.VITE_ESIM_ACCESS_KEY) || 
+                    (typeof process !== 'undefined' && process.env.VITE_ESIM_ACCESS_KEY) || 
+                    '';
+    
     const headers = {
       'Content-Type': 'application/json',
       'X-API-Key': API_KEY,
@@ -19,7 +25,6 @@ export class ApiService {
     };
 
     try {
-      console.debug(`[PROD-CORE] Request: ${endpoint}`);
       const response = await fetch(endpoint, {
         ...options,
         headers,
@@ -31,7 +36,7 @@ export class ApiService {
       if (!response.ok) return null;
       return await response.json();
     } catch (error) {
-      console.warn('[PROD-CORE-TIMEOUT/ERROR] Falling back to local data', error);
+      console.warn('[API-ERROR] Network request failed:', error);
       return null;
     }
   }

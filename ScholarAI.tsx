@@ -35,28 +35,27 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
     setIsTyping(true);
 
     try {
-      // Use strictly compliant initialization
+      // API Key is automatically injected from process.env.API_KEY in this environment
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{ parts: [{ text: userMessage }] }],
         config: {
           systemInstruction: `
-            You are "Scholar AI", the dedicated support agent for "I Have Landed", a premium eSIM service for international students.
-            User Profile: ${userEmail ? `Institutional user (${userEmail})` : 'Prospective scholar'}.
-            Voice: High-end concierge. Professional, architectural, and elite. 
-            Objective: Efficiently assist with eSIM installation, coverage queries, and telemetry tracking.
-            Network: Tier-1 global infrastructure (Verizon, Vodafone, Orange).
-            Rule: Response must be maximum 2 sentences. Use sophisticated vocabulary.
-            Example: "Your connectivity profile for the United Kingdom is active on the Vodafone 5G network. Configuration is completed via the QR code residing in your secure dashboard."
+            You are "Scholar AI", the dedicated concierge for "I Have Landed", an elite eSIM service for international students.
+            Identity: High-end, architectural, minimalist. 
+            Tone: Professional, helpful, and concise. 
+            Knowledge: We provide 5G data eSIMs in 12 global hubs (Verizon, Vodafone, Orange networks).
+            Constraint: Max 2 sentences. Use sophisticated language.
+            Context: User is ${userEmail ? `authenticated as ${userEmail}` : 'a prospective scholar'}.
           `
         }
       });
 
-      const text = response.text || "Our neural nodes are temporarily recalibrating. Please contact support@ihavelanded.com.";
+      const text = response.text || "I apologize, my connection to the global node is temporarily unstable. Please reach our support desk.";
       setMessages(prev => [...prev, { role: 'assistant', text }]);
     } catch (error) {
-      console.error("AI Error:", error);
+      console.error("Scholar AI Error:", error);
       setMessages(prev => [...prev, { role: 'assistant', text: "Service link interrupted. Our technical concierge team has been notified." }]);
     } finally {
       setIsTyping(false);
@@ -67,11 +66,10 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
 
   return (
     <div className="fixed inset-y-0 right-0 z-[200] w-full max-w-md bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 border-l border-slate-100">
-      {/* Header Panel */}
       <div className="bg-slate-900 p-10 text-white flex items-center justify-between shrink-0 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-48 h-48 bg-airalo/10 blur-[80px] rounded-full translate-x-1/2 -translate-y-1/2"></div>
         <div className="flex items-center gap-5 relative z-10">
-          <div className="w-14 h-14 bg-airalo rounded-2xl flex items-center justify-center shadow-lg shadow-airalo/20 ring-4 ring-airalo/10 transition-transform hover:scale-105">
+          <div className="w-14 h-14 bg-airalo rounded-2xl flex items-center justify-center shadow-lg shadow-airalo/20 ring-4 ring-airalo/10">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
               <path d="M12 2C6.477 2 2 6.477 2 12c0 1.891.527 3.653 1.438 5.155l-1.353 4.057a1 1 0 001.265 1.265l4.057-1.353A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" />
             </svg>
@@ -88,7 +86,6 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
         </button>
       </div>
 
-      {/* Messaging Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-10 space-y-10 bg-[#f8f9fb] custom-scrollbar">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-3 duration-500`}>
@@ -112,7 +109,6 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
         )}
       </div>
 
-      {/* Interface Area */}
       <form onSubmit={handleSend} className="p-10 border-t border-slate-100 bg-white shrink-0">
         <div className="relative group">
           <input 
@@ -131,11 +127,6 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
               <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.897 28.897 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z" />
             </svg>
           </button>
-        </div>
-        <div className="mt-10 flex items-center justify-center gap-3 opacity-20">
-           <div className="h-px bg-slate-400 w-10"></div>
-           <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600">Secure AI Node Active</span>
-           <div className="h-px bg-slate-400 w-10"></div>
         </div>
       </form>
     </div>
