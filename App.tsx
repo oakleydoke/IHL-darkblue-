@@ -66,8 +66,8 @@ const App: React.FC = () => {
   const handlePostPaymentSuccess = async (sessionId: string) => {
     setCheckoutState('esim_provisioning');
     try {
-      // High-end delay for cinematic effect
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Cinematic delay to allow carrier synchronization
+      await new Promise(resolve => setTimeout(resolve, 4000));
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
       const finalizedOrder = {
@@ -75,22 +75,23 @@ const App: React.FC = () => {
         items: [...cartItems]
       };
 
-      // 1. Save to global ledger for persistence
+      // 1. Persist to device ledger
       AuthService.saveOrderToLedger(finalizedOrder);
       
-      // 2. Automatically set session so "Login" works immediately
-      setUserEmail(finalizedOrder.email);
-      localStorage.setItem('ihavelanded_active_email', finalizedOrder.email);
+      // 2. Initialize active session immediately so Dashboard button works
+      const email = finalizedOrder.email.toLowerCase();
+      setUserEmail(email);
+      localStorage.setItem('ihavelanded_active_email', email);
 
       setCurrentOrder(finalizedOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
     } catch (error) {
-      console.warn("API Provisioning Error:", error);
+      console.warn("Provisioning Delay:", error.message);
       
       const fallbackOrder: Order = {
-        id: sessionId.substring(0, 12).toUpperCase(),
-        email: pendingEmail || 'Checking order...',
+        id: sessionId.substring(sessionId.length - 8).toUpperCase(),
+        email: pendingEmail || 'Syncing account...',
         items: [...cartItems],
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
         currency: 'USD' as any,
@@ -100,6 +101,11 @@ const App: React.FC = () => {
       };
       
       AuthService.saveOrderToLedger(fallbackOrder);
+      if (fallbackOrder.email && fallbackOrder.email.includes('@')) {
+        setUserEmail(fallbackOrder.email);
+        localStorage.setItem('ihavelanded_active_email', fallbackOrder.email);
+      }
+
       setCurrentOrder(fallbackOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
@@ -145,9 +151,8 @@ const App: React.FC = () => {
   };
 
   const resetFlow = () => {
-    // If we have an active session (just bought something), go to dashboard
     if (userEmail) {
-      setView('dashboard');
+      setView('dashboard'); // Direct transition to user data
     } else {
       setView('store');
     }
@@ -195,7 +200,6 @@ const App: React.FC = () => {
 
       <Footer />
 
-      {/* Overlays */}
       {selectedCountry && (
         <PlanModal
           country={selectedCountry}
@@ -254,17 +258,17 @@ const App: React.FC = () => {
       <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} userEmail={userEmail} />
 
       {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
-        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700">
-           {/* Loader UI remains as previously defined */}
+        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700 text-center">
            <div className="relative w-64 h-64 mb-16">
             <div className="absolute inset-0 border-[2px] border-white/5 rounded-full"></div>
-            <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin [animation-duration:1.2s]"></div>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
                <svg className="w-16 h-16 text-white mb-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo">Syncing Node</span>
+               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo animate-pulse">Carrier Link</span>
             </div>
           </div>
-          <h2 className="text-4xl font-black uppercase tracking-tighter italic">Provisioning Asset</h2>
+          <h2 className="text-4xl font-black uppercase tracking-tighter italic">Provisioning High-Speed Asset</h2>
+          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Handshaking with Tier-1 Carrier Node...</p>
         </div>
       )}
     </div>

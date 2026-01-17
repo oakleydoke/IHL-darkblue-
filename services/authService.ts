@@ -1,8 +1,28 @@
 
+/**
+ * AUTH SERVICE
+ * ------------------------------------------------------------------
+ * STORAGE POLICY: This application uses browser localStorage for persistence.
+ * Keys: 
+ * - 'ihavelanded_users': Maps email -> { password, orderIds }
+ * - 'ihavelanded_orders': A global ledger of all transactions on this device.
+ * 
+ * NOTE: For production multi-device support, these should be moved to a
+ * centralized database (e.g. Supabase, Firebase, or PostgreSQL).
+ * ------------------------------------------------------------------
+ */
+
 export interface UserAccount {
   email: string;
   password?: string;
   orderIds: string[];
+}
+
+export interface OrderLedgerEntry {
+  id: string;
+  email: string;
+  timestamp: string;
+  [key: string]: any;
 }
 
 export class AuthService {
@@ -14,40 +34,57 @@ export class AuthService {
     return data ? JSON.parse(data) : {};
   }
 
+  /**
+   * Saves an order to the device's global ledger.
+   * This ensures that even "Guest" checkouts are tracked for the dashboard.
+   */
   static saveOrderToLedger(order: any): void {
-    const orders = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
+    const orders: OrderLedgerEntry[] = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const normalizedEmail = order.email.toLowerCase().trim();
     
-    if (!orders.find((o: any) => o.id === order.id)) {
-      orders.push({
-        ...order,
-        email: normalizedEmail,
-        timestamp: new Date().toISOString()
-      });
-      localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
+    // Check if order already exists
+    const existingIdx = orders.findIndex((o) => o.id === order.id);
+    const entry = {
+      ...order,
+      email: normalizedEmail,
+      timestamp: order.timestamp || new Date().toISOString()
+    };
+
+    if (existingIdx === -1) {
+      orders.push(entry);
+    } else {
+      // Update existing (useful if activation code arrived later)
+      orders[existingIdx] = entry;
     }
     
-    // Auto-link to existing user if they happen to be logged in
-    const activeEmail = localStorage.getItem('ihavelanded_active_email');
-    if (activeEmail && activeEmail.toLowerCase() === normalizedEmail) {
-      this.addOrderToUser(activeEmail, order.id);
+    localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
+    
+    // Auto-link to user profile if it exists
+    const users = this.getUsers();
+    if (users[normalizedEmail]) {
+      this.addOrderToUser(normalizedEmail, order.id);
     }
   }
 
+  /**
+   * Registers a new account or attaches a password to a guest account.
+   */
   static register(email: string, password: string, firstOrderId: string): void {
     const users = this.getUsers();
     const normalizedEmail = email.toLowerCase().trim();
     
-    const ledger = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
+    // Retrieve all historical orders for this email from our local device ledger
+    const ledger: OrderLedgerEntry[] = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const userOrders = ledger
-      .filter((o: any) => o.email.toLowerCase() === normalizedEmail)
-      .map((o: any) => o.id);
+      .filter((o) => o.email.toLowerCase() === normalizedEmail)
+      .map((o) => o.id);
 
     users[normalizedEmail] = {
       email: normalizedEmail,
       password,
       orderIds: Array.from(new Set([...userOrders, firstOrderId]))
     };
+    
     localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
   }
 
@@ -62,12 +99,15 @@ export class AuthService {
     }
   }
 
+  /**
+   * Authenticates a user.
+   * If the user exists in 'ihavelanded_users' with a password, it validates.
+   */
   static login(email: string, password: string): UserAccount | null {
     const users = this.getUsers();
     const normalizedEmail = email.toLowerCase().trim();
     const user = users[normalizedEmail];
     
-    // Support "guest login" for testing: if they have orders but no password, we still need a full account
     if (user && user.password === password) {
       return user;
     }
