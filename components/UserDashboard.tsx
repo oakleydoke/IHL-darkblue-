@@ -1,7 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { ESimService, ESimUsage } from '../services/eSimService';
-import { AuthService } from '../services/authService';
 
 interface UserDashboardProps {
   email: string;
@@ -16,22 +15,20 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
 
   useEffect(() => {
     const fetchData = async () => {
-      const users = JSON.parse(localStorage.getItem('ihavelanded_users') || '{}');
-      const user = users[email];
-      
-      if (user && user.orderIds) {
-        const data = await ESimService.getUserESims(user.orderIds);
+      setLoading(true);
+      try {
+        const data = await ESimService.getUserESims(email);
         setEsims(data);
         if (data.length > 0) {
+          // Fetch metrics for the first/active eSIM
           const usage = await ESimService.getUsageMetrics(data[0].iccid);
           setSelectedUsage(usage);
         }
-      } else {
-        // Fallback for demo/mock purposes if no direct link found
-        const mockUsage = await ESimService.getUsageMetrics('89860400000000000001');
-        setSelectedUsage(mockUsage);
+      } catch (err) {
+        console.error("Dashboard Fetch Error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchData();
   }, [email]);
@@ -83,7 +80,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
         ) : (
           <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-10">
-              {selectedUsage && (
+              {selectedUsage ? (
                 <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
                   <div className="p-10 md:p-16">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
@@ -147,6 +144,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div className="bg-white rounded-[3rem] shadow-2xl p-24 text-center border border-slate-100">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-4">No Active Lines</h3>
+                  <p className="text-slate-500 font-medium mb-10 max-w-xs mx-auto">Purchase a plan to see your real-time 5G telemetry here.</p>
+                  <button onClick={onClose} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest">Explore Marketplace</button>
+                </div>
               )}
 
               <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
@@ -156,7 +164,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                 </div>
                 <div className="divide-y divide-slate-100">
                   {esims.length > 0 ? esims.map((sim) => (
-                    <div key={sim.iccid} className="px-12 py-10 flex items-center justify-between group hover:bg-slate-50 transition-all cursor-default">
+                    <div key={sim.id} className="px-12 py-10 flex items-center justify-between group hover:bg-slate-50 transition-all cursor-default">
                       <div className="flex items-center gap-8">
                         <span className="text-4xl group-hover:scale-110 transition-transform">{sim.flag}</span>
                         <div>
@@ -171,7 +179,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                     </div>
                   )) : (
                     <div className="p-20 text-center">
-                       <p className="text-slate-400 font-medium italic">No past transactions on this account node.</p>
+                       <p className="text-slate-400 font-medium italic">No past transactions found on this account node.</p>
                     </div>
                   )}
                 </div>
@@ -184,7 +192,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                 <div className="space-y-6">
                   <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">ICCID Identifier</p>
-                    <p className="text-xs font-mono font-bold text-slate-700 break-all">{selectedUsage?.iccid || 'NOT_ASSIGNED'}</p>
+                    <p className="text-xs font-mono font-bold text-slate-700 break-all">{selectedUsage?.iccid || 'PENDING_NODE_ALLOCATION'}</p>
                   </div>
                   <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Network Access Point</p>
@@ -195,7 +203,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                   <button className="text-airalo font-black text-[10px] uppercase tracking-[0.3em] hover:text-slate-900 transition-colors flex items-center gap-3">
                     View Network Logs
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                      <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </div>

@@ -17,6 +17,7 @@ import ScholarAI from './components/ScholarAI';
 import StripePaymentSheet from './components/StripePaymentSheet';
 import { ESimService } from './services/eSimService';
 import { StripeService } from './services/stripeService';
+import { AuthService } from './services/authService';
 import { ENV } from './config';
 
 type CheckoutState = 'idle' | 'preparing_stripe' | 'local_payment' | 'esim_provisioning';
@@ -68,25 +69,34 @@ const App: React.FC = () => {
       // High-end delay for cinematic effect
       await new Promise(resolve => setTimeout(resolve, 3000));
       const order = await ESimService.getOrderByStripeSession(sessionId);
-      setCurrentOrder(order);
+      
+      // We must reconstruct items for the confirmation screen since Stripe doesn't return them easily
+      const finalizedOrder = {
+        ...order,
+        items: [...cartItems]
+      };
+
+      // Save to global ledger for persistence
+      AuthService.saveOrderToLedger(finalizedOrder);
+      
+      setCurrentOrder(finalizedOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
     } catch (error) {
-      console.warn("API Provisioning Error (Expected if out of credit):", error);
+      console.warn("API Provisioning Error:", error);
       
-      // If we are in production and the API failed, we still want to show the Success UI
-      // because the user HAS paid Stripe successfully.
       const fallbackOrder: Order = {
         id: sessionId.substring(0, 12).toUpperCase(),
-        email: pendingEmail || 'Checking order...',
+        email: pendingEmail || 'Checking carrier nodes...',
         items: [...cartItems],
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
-        currency: 'USD',
+        currency: 'USD' as any,
         status: 'completed',
-        qrCode: undefined, // UI shows "Provisioning" state when QR is missing
+        qrCode: undefined,
         activationCode: 'PROVISIONING_DELAYED'
       };
       
+      AuthService.saveOrderToLedger(fallbackOrder);
       setCurrentOrder(fallbackOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
@@ -103,11 +113,12 @@ const App: React.FC = () => {
         email: pendingEmail || 'scholar@university.edu',
         items: [...cartItems],
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
-        currency: 'USD',
+        currency: 'USD' as any,
         status: 'completed',
         qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$SMDP.GSMA.COM$IHL-PROD-TOKEN',
         activationCode: 'LPA:1$SMDP.GSMA.COM$IHL-PROD-TOKEN'
       };
+      AuthService.saveOrderToLedger(mockOrder);
       setCurrentOrder(mockOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
