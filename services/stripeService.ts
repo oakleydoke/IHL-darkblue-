@@ -15,8 +15,16 @@ export class StripeService {
       })
     });
 
-    const { checkoutUrl, error } = await response.json();
-    if (error) throw new Error(error);
-    if (checkoutUrl) window.location.assign(checkoutUrl);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Gateway connection failed');
+    }
+
+    const { checkoutUrl } = await response.json();
+    if (checkoutUrl) {
+      window.location.assign(checkoutUrl);
+    } else {
+      throw new Error('No checkout URL returned from server');
+    }
   }
 }
