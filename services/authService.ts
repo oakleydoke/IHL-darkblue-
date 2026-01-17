@@ -7,8 +7,8 @@
  * - 'ihavelanded_users': Maps email -> { password, orderIds }
  * - 'ihavelanded_orders': A global ledger of all transactions on this device.
  * 
- * NOTE: For production multi-device support, these should be moved to a
- * centralized database (e.g. Supabase, Firebase, or PostgreSQL).
+ * NOTE: For production multi-device support, these records should be 
+ * synchronized to a centralized database (e.g. Supabase or PostgreSQL).
  * ------------------------------------------------------------------
  */
 
@@ -42,7 +42,6 @@ export class AuthService {
     const orders: OrderLedgerEntry[] = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const normalizedEmail = order.email.toLowerCase().trim();
     
-    // Check if order already exists
     const existingIdx = orders.findIndex((o) => o.id === order.id);
     const entry = {
       ...order,
@@ -53,27 +52,22 @@ export class AuthService {
     if (existingIdx === -1) {
       orders.push(entry);
     } else {
-      // Update existing (useful if activation code arrived later)
-      orders[existingIdx] = entry;
+      orders[existingIdx] = entry; 
     }
     
     localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
     
-    // Auto-link to user profile if it exists
+    // Auto-link to existing user if they happen to be logged in
     const users = this.getUsers();
     if (users[normalizedEmail]) {
       this.addOrderToUser(normalizedEmail, order.id);
     }
   }
 
-  /**
-   * Registers a new account or attaches a password to a guest account.
-   */
   static register(email: string, password: string, firstOrderId: string): void {
     const users = this.getUsers();
     const normalizedEmail = email.toLowerCase().trim();
     
-    // Retrieve all historical orders for this email from our local device ledger
     const ledger: OrderLedgerEntry[] = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const userOrders = ledger
       .filter((o) => o.email.toLowerCase() === normalizedEmail)
@@ -99,10 +93,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Authenticates a user.
-   * If the user exists in 'ihavelanded_users' with a password, it validates.
-   */
   static login(email: string, password: string): UserAccount | null {
     const users = this.getUsers();
     const normalizedEmail = email.toLowerCase().trim();

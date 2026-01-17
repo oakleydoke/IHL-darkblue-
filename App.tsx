@@ -18,6 +18,7 @@ import StripePaymentSheet from './components/StripePaymentSheet';
 import { ESimService } from './services/eSimService';
 import { StripeService } from './services/stripeService';
 import { AuthService } from './services/authService';
+import { GoogleSheetsService } from './services/googleSheetsService';
 import { ENV } from './config';
 
 type CheckoutState = 'idle' | 'preparing_stripe' | 'local_payment' | 'esim_provisioning';
@@ -38,13 +39,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('store');
   const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('ihavelanded_active_email'));
 
-  // Body Scroll Lock for High-End UX
   useEffect(() => {
     const shouldLock = isCartOpen || !!selectedCountry || showLoginModal || showAISupport || checkoutState !== 'idle';
     document.body.style.overflow = shouldLock ? 'hidden' : 'unset';
   }, [isCartOpen, selectedCountry, showLoginModal, showAISupport, checkoutState]);
 
-  // Persist cart
   useEffect(() => {
     localStorage.setItem('ihavelanded_cart', JSON.stringify(cartItems));
   }, [cartItems]);
@@ -66,8 +65,7 @@ const App: React.FC = () => {
   const handlePostPaymentSuccess = async (sessionId: string) => {
     setCheckoutState('esim_provisioning');
     try {
-      // Cinematic delay to allow carrier synchronization
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
       const finalizedOrder = {
@@ -75,11 +73,14 @@ const App: React.FC = () => {
         items: [...cartItems]
       };
 
-      // 1. Persist to device ledger
+      // 1. Persist order data
       AuthService.saveOrderToLedger(finalizedOrder);
       
-      // 2. Initialize active session immediately so Dashboard button works
-      const email = finalizedOrder.email.toLowerCase();
+      // 2. Trigger secondary fulfillment (Recording transaction)
+      await GoogleSheetsService.recordSignup(finalizedOrder.email, 'CUSTOMER_PURCHASE', finalizedOrder);
+      
+      // 3. SECURE SESSION: Initialize user state immediately
+      const email = finalizedOrder.email.toLowerCase().trim();
       setUserEmail(email);
       localStorage.setItem('ihavelanded_active_email', email);
 
@@ -87,28 +88,27 @@ const App: React.FC = () => {
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
     } catch (error) {
-      console.warn("Provisioning Delay:", error.message);
-      
+      console.warn("API Node Delay:", error.message);
       const fallbackOrder: Order = {
         id: sessionId.substring(sessionId.length - 8).toUpperCase(),
-        email: pendingEmail || 'Syncing account...',
+        email: pendingEmail || 'Scholar Session',
         items: [...cartItems],
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
         currency: 'USD' as any,
         status: 'completed',
-        qrCode: undefined,
-        activationCode: 'PROVISIONING_DELAYED'
+        activationCode: 'PROVISIONING_VIA_EMAIL'
       };
       
       AuthService.saveOrderToLedger(fallbackOrder);
+      
       if (fallbackOrder.email && fallbackOrder.email.includes('@')) {
-        setUserEmail(fallbackOrder.email);
-        localStorage.setItem('ihavelanded_active_email', fallbackOrder.email);
+        const email = fallbackOrder.email.toLowerCase().trim();
+        setUserEmail(email);
+        localStorage.setItem('ihavelanded_active_email', email);
       }
 
       setCurrentOrder(fallbackOrder);
       setCartItems([]);
-      localStorage.removeItem('ihavelanded_cart');
     } finally {
       setCheckoutState('idle');
     }
@@ -124,17 +124,17 @@ const App: React.FC = () => {
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
         currency: 'USD' as any,
         status: 'completed',
-        qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$SMDP.GSMA.COM$IHL-PROD-TOKEN',
-        activationCode: 'LPA:1$SMDP.GSMA.COM$IHL-PROD-TOKEN'
+        activationCode: 'PROVISIONED_VIA_EMAIL'
       };
       AuthService.saveOrderToLedger(mockOrder);
-      setUserEmail(mockOrder.email);
-      localStorage.setItem('ihavelanded_active_email', mockOrder.email);
+      const email = mockOrder.email.toLowerCase().trim();
+      setUserEmail(email);
+      localStorage.setItem('ihavelanded_active_email', email);
       setCurrentOrder(mockOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
       setCheckoutState('idle');
-    }, 2800);
+    }, 2500);
   };
 
   const handleLoginSuccess = (email: string) => {
@@ -151,8 +151,9 @@ const App: React.FC = () => {
   };
 
   const resetFlow = () => {
+    // Determine the next view based on authentication state
     if (userEmail) {
-      setView('dashboard'); // Direct transition to user data
+      setView('dashboard'); // Route directly to dashboard since session is active
     } else {
       setView('store');
     }
@@ -264,11 +265,11 @@ const App: React.FC = () => {
             <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin [animation-duration:1.2s]"></div>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
                <svg className="w-16 h-16 text-white mb-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo animate-pulse">Carrier Link</span>
+               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo animate-pulse">Node Sync</span>
             </div>
           </div>
-          <h2 className="text-4xl font-black uppercase tracking-tighter italic">Provisioning High-Speed Asset</h2>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Handshaking with Tier-1 Carrier Node...</p>
+          <h2 className="text-4xl font-black uppercase tracking-tighter italic">Securing Your Provision</h2>
+          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Connecting to Tier-1 Carrier Node...</p>
         </div>
       )}
     </div>
