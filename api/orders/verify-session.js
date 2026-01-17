@@ -10,7 +10,7 @@ const PACKAGE_MAP = {
   // USA
   'price_us_5gb_prod': { location: 'US', package: 'US_5GB_30D' },
   'price_us_10gb_prod': { location: 'US', package: 'US_10GB_30D' },
-  'price_us_unlimited_prod': { location: 'US', package: 'US_UL_30D' },
+  'price_us_unlimited_prod': { location: 'US', package: 'PKY3WHPRZ' },
   // UK
   'price_uk_3gb_prod': { location: 'GB', package: 'GB_3GB_30D' },
   'price_uk_10gb_prod': { location: 'GB', package: 'GB_10GB_30D' },
