@@ -4,11 +4,8 @@
  * 
  * SETUP CHECKLIST:
  * 1. Trigger: HTTPS -> "Allow unauthenticated invocations".
- * 2. Environment Variable (Under "Runtime settings" at the bottom of Page 1):
- *    - Name: STRIPE_SECRET_KEY
- *    - Value: sk_live_... (Get this from Stripe Dashboard > Developers > API Keys)
+ * 2. Environment Variable: STRIPE_SECRET_KEY
  * 3. Runtime: Node.js 20
- * 4. Entry point: createSession
  */
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -34,7 +31,8 @@ exports.createSession = async (req, res) => {
     }
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card', 'apple_pay', 'google_pay'],
+      // Fixed: Switched to automatic_payment_methods
+      automatic_payment_methods: { enabled: true },
       customer_email: email,
       line_items: items.map(item => ({
         price: item.priceId, 
@@ -43,6 +41,10 @@ exports.createSession = async (req, res) => {
       mode: 'payment',
       success_url: successUrl,
       cancel_url: cancelUrl,
+      metadata: {
+        customer_email: email,
+        plan_ids: items.map(i => i.priceId).join(',')
+      }
     });
 
     res.status(200).json({ checkoutUrl: session.url });

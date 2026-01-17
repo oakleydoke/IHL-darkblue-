@@ -19,7 +19,9 @@ export default async function handler(req, res) {
     }
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card', 'apple_pay', 'google_pay'],
+      // Modern Stripe standard: handles card, apple_pay, google_pay etc. automatically
+      // Ensure these are enabled in your Stripe Dashboard > Settings > Payment Methods
+      automatic_payment_methods: { enabled: true },
       customer_email: email,
       line_items: items.map(item => ({
         price: item.priceId,
@@ -37,7 +39,6 @@ export default async function handler(req, res) {
     res.status(200).json({ checkoutUrl: session.url });
   } catch (error) {
     console.error('Stripe Error:', error);
-    // Return the actual stripe error message so the user knows what's wrong (e.g. invalid Price ID)
     res.status(400).json({ error: error.message || 'Payment session creation failed' });
   }
 }

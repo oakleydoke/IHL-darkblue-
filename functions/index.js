@@ -21,7 +21,8 @@ exports.api = functions.https.onRequest((req, res) => {
         }
 
         const session = await stripe.checkout.sessions.create({
-          payment_method_types: ['card', 'apple_pay', 'google_pay'],
+          // Fixed: Use automatic_payment_methods to avoid invalid string errors
+          automatic_payment_methods: { enabled: true },
           customer_email: email,
           line_items: items.map(item => ({
             price: item.priceId,
@@ -31,6 +32,10 @@ exports.api = functions.https.onRequest((req, res) => {
           success_url: successUrl,
           cancel_url: cancelUrl,
           automatic_tax: { enabled: true },
+          metadata: {
+            customer_email: email,
+            plan_ids: items.map(i => i.priceId).join(',')
+          }
         });
 
         return res.status(200).json({ checkoutUrl: session.url });
