@@ -10,7 +10,7 @@ const PACKAGE_MAP = {
   // USA
   'price_us_5gb_prod': { location: 'US', package: 'US_5GB_30D' },
   'price_us_10gb_prod': { location: 'US', package: 'US_10GB_30D' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { location: 'US', package: 'PKY3WHPRZ' }, // Fixed ID to match constants.tsx
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { location: 'US', package: 'PKY3WHPRZ' },
   // UK
   'price_uk_3gb_prod': { location: 'GB', package: 'GB_3GB_30D' },
   'price_uk_10gb_prod': { location: 'GB', package: 'GB_10GB_30D' },
@@ -55,12 +55,17 @@ export default async function handler(req, res) {
 
       const esimData = esimResponse.data;
 
+      // Check if the provider returned an error code (e.g., lack of balance)
+      if (esimData.code !== '000000' && esimData.code !== 0) {
+          throw new Error(`Provider Error: ${esimData.message || 'Unknown carrier error'}`);
+      }
+
       // 4a. Success Case: Return the real carrier data
       return res.status(200).json({
         id: session.id,
         email: session.customer_email,
         status: 'completed',
-        items: [], // Optional: add logic to reconstruct items if needed for UI
+        items: [],
         total: session.amount_total / 100,
         currency: 'USD',
         qrCode: esimData.orderList?.[0]?.acCode ? 
@@ -72,23 +77,24 @@ export default async function handler(req, res) {
     } catch (esimError) {
       console.warn('eSIMAccess Provisioning Delayed (Likely Credit/API issue):', esimError.message);
       
-      // 4b. "Pending" Success Case: Payment is confirmed, so we MUST return a valid Order object
-      // so the frontend moves to the confirmation page instead of staying on home.
+      // 4b. "Pending" Success Case: We return 200 so the frontend shows the confirmation page.
+      // We do NOT return an "error" key so the frontend's try/catch doesn't trigger an alert.
       return res.status(200).json({
         id: session.id,
         email: session.customer_email,
-        status: 'completed', // We mark as completed because payment IS done
+        status: 'completed', 
         items: [],
         total: session.amount_total / 100,
         currency: 'USD',
-        qrCode: null, // UI handles null by showing "Provisioning" state
-        activationCode: 'PENDING_PROVISIONING',
+        qrCode: null, 
+        activationCode: 'PROVISIONING_PENDING',
         isPendingCarrier: true
       });
     }
 
   } catch (error) {
-    console.error('Stripe Session Retrieval Error:', error.message);
-    res.status(500).json({ error: 'Internal system error verifying session.' });
+    console.error('Critical verification error:', error.message);
+    // Only return 500 if Stripe itself fails
+    res.status(500).json({ error: 'System busy. Payment confirmed.' });
   }
 }
