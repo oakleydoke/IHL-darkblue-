@@ -16,8 +16,14 @@ export class StripeService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Gateway connection failed');
+      let errorMessage = 'Gateway connection failed';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        errorMessage = `Server Error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const { checkoutUrl } = await response.json();

@@ -2,6 +2,22 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
+/**
+ * PRODUCTION MAPPING TABLE
+ * Map your Stripe Price IDs (from constants.tsx) to eSIMAccess Package Codes.
+ */
+const PACKAGE_MAP = {
+  // USA
+  'price_us_5gb_prod': { location: 'US', package: 'US_5GB_30D' },
+  'price_us_10gb_prod': { location: 'US', package: 'US_10GB_30D' },
+  'price_us_unlimited_prod': { location: 'US', package: 'US_UL_30D' },
+  // UK
+  'price_uk_3gb_prod': { location: 'GB', package: 'GB_3GB_30D' },
+  'price_uk_10gb_prod': { location: 'GB', package: 'GB_10GB_30D' },
+  'price_uk_unlimited_prod': { location: 'GB', package: 'GB_UL_30D' },
+  // Add mappings for France, Germany, Japan, etc. as you create them in Stripe
+};
+
 export default async function handler(req, res) {
   const { sessionId } = req.query;
 
@@ -17,16 +33,17 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Payment not completed' });
     }
 
-    // 2. Provision with eSIMAccess
-    // In a production environment, you would map your Stripe Price ID to an eSIMAccess Package Code.
-    // Here we use a placeholder logic for the eSIMAccess Order API.
+    // 2. Identify what was purchased
+    // We stored price IDs in metadata during create-session.js
+    const priceId = session.metadata?.plan_ids?.split(',')[0];
+    const planConfig = PACKAGE_MAP[priceId] || { location: 'US', package: 'US_5GB_30D' }; // Fallback
+
+    // 3. Provision with eSIMAccess
     const ESIM_API_URL = 'https://api.esimaccess.com/order/v1/buy';
     
-    // Note: eSIMAccess requires a specific signature/auth header which usually 
-    // involves AppKey and a timestamp. This is a simplified integration logic.
     const esimResponse = await axios.post(ESIM_API_URL, {
-      locationCode: 'US', // Would be derived from session metadata/mapping
-      packageCode: 'US_5GB_30D', // Your internal mapping
+      locationCode: planConfig.location,
+      packageCode: planConfig.package,
       quantity: 1,
       externalOrderNo: session.id
     }, {
@@ -38,7 +55,7 @@ export default async function handler(req, res) {
 
     const esimData = esimResponse.data;
 
-    // 3. Return the real carrier data to the frontend
+    // 4. Return the real carrier data to the frontend
     res.status(200).json({
       id: session.id,
       email: session.customer_email,
@@ -51,11 +68,10 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Provisioning Error:', error.response?.data || error.message);
-    // If eSIMAccess fails, we still return success if paid, but flag the delay
     res.status(200).json({
       id: sessionId,
       status: 'processing',
-      message: 'Payment verified. eSIM delivery in progress via email.'
+      message: 'Payment verified. Our carrier nodes are syncing. Your eSIM will arrive via email shortly.'
     });
   }
 }

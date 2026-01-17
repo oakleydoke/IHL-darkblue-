@@ -119,11 +119,12 @@ const App: React.FC = () => {
       setCheckoutState('preparing_stripe');
       try {
         await StripeService.redirectToCheckout(cartItems, email);
-      } catch (error) {
-        console.error('Checkout failed', error);
+      } catch (error: any) {
+        console.error('Checkout failed:', error);
         setCheckoutState('idle');
         setIsCartOpen(true);
-        alert('Stripe Secure Gateway unreachable. Please check your connection.');
+        // Expose the real error message to the user for faster debugging
+        alert(`Checkout Unsuccessful: ${error.message || 'Please check your connection.'}`);
       }
     }
   };

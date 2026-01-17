@@ -6,8 +6,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error('CRITICAL: STRIPE_SECRET_KEY is not set in environment variables.');
+    return res.status(500).json({ error: 'Payment Gateway Configuration Error: Missing Secret Key. Check Vercel Dashboard.' });
+  }
+
   try {
     const { email, items, successUrl, cancelUrl } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'Cart is empty' });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card', 'apple_pay', 'google_pay'],
@@ -19,7 +28,6 @@ export default async function handler(req, res) {
       mode: 'payment',
       success_url: successUrl,
       cancel_url: cancelUrl,
-      // Metadata allows us to track the order details through the Stripe flow
       metadata: {
         customer_email: email,
         plan_ids: items.map(i => i.priceId).join(',')
@@ -29,6 +37,7 @@ export default async function handler(req, res) {
     res.status(200).json({ checkoutUrl: session.url });
   } catch (error) {
     console.error('Stripe Error:', error);
-    res.status(500).json({ error: error.message });
+    // Return the actual stripe error message so the user knows what's wrong (e.g. invalid Price ID)
+    res.status(400).json({ error: error.message || 'Payment session creation failed' });
   }
 }

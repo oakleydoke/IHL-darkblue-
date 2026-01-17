@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
+import { ENV } from './config';
 
 interface ScholarAIProps {
   isOpen: boolean;
@@ -35,11 +36,13 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
     setIsTyping(true);
 
     try {
-      // API Key is automatically injected from process.env.API_KEY in this environment
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!ENV.GEMINI_API_KEY) {
+        throw new Error("API Key missing");
+      }
+      const ai = new GoogleGenAI({ apiKey: ENV.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: userMessage }] }],
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
         config: {
           systemInstruction: `
             You are "Scholar AI", the dedicated concierge for "I Have Landed", an elite eSIM service for international students.

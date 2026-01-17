@@ -16,7 +16,7 @@ export const TOP_COUNTRIES: Country[] = [
     plans: [
       { id: 'us-1', name: 'Student Essential', data: '5GB', validity: '30 Days', price: 15, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_us_5gb_prod' },
       { id: 'us-2', name: 'Student Pro', data: '10GB', validity: '30 Days', price: 25, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_us_10gb_prod' },
-      { id: 'us-3', name: 'Academic Unlimited', data: 'Unlimited', validity: '30 Days', price: 45, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_us_unlimited_prod' },
+      { id: 'us-3', name: 'Academic Unlimited', data: 'Unlimited', validity: '30 Days', price: 45, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_1SpHjJCPrRzENMHluk7SSbZi' },
     ]
   },
   {
@@ -72,7 +72,7 @@ export const TOP_COUNTRIES: Country[] = [
     name: 'Italy',
     code: 'IT',
     flag: '🇮🇹',
-    image: 'https://images.unsplash.com/photo-1529260830199-42c42dda5f6d?auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=800&q=80',
     plans: [
       { id: 'it-1', name: 'Roman Roam', data: '5GB', validity: '30 Days', price: 12, currency: 'USD', coverage: 'Italy (TIM)', stripePriceId: 'price_it_5gb_prod' },
       { id: 'it-2', name: 'Milan Connect', data: '15GB', validity: '30 Days', price: 23, currency: 'USD', coverage: 'Italy (TIM)', stripePriceId: 'price_it_15gb_prod' },
