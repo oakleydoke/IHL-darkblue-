@@ -31,8 +31,8 @@ exports.createSession = async (req, res) => {
     }
 
     const session = await stripe.checkout.sessions.create({
-      // Fixed: Switched to automatic_payment_methods
-      automatic_payment_methods: { enabled: true },
+      // Reverted to compatible payment_method_types
+      payment_method_types: ['card'],
       customer_email: email,
       line_items: items.map(item => ({
         price: item.priceId, 

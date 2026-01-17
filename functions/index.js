@@ -21,8 +21,8 @@ exports.api = functions.https.onRequest((req, res) => {
         }
 
         const session = await stripe.checkout.sessions.create({
-          // Fixed: Use automatic_payment_methods to avoid invalid string errors
-          automatic_payment_methods: { enabled: true },
+          // Compatible method for all API versions
+          payment_method_types: ['card'],
           customer_email: email,
           line_items: items.map(item => ({
             price: item.priceId,

@@ -19,9 +19,10 @@ export default async function handler(req, res) {
     }
 
     const session = await stripe.checkout.sessions.create({
-      // Modern Stripe standard: handles card, apple_pay, google_pay etc. automatically
-      // Ensure these are enabled in your Stripe Dashboard > Settings > Payment Methods
-      automatic_payment_methods: { enabled: true },
+      // Use 'card' for maximum compatibility across Stripe API versions.
+      // Apple Pay and Google Pay will be offered automatically if enabled in your 
+      // Stripe Dashboard (Settings > Payment Methods).
+      payment_method_types: ['card'],
       customer_email: email,
       line_items: items.map(item => ({
         price: item.priceId,
