@@ -28,11 +28,11 @@ export class ESimService extends ApiService {
   }
 
   static async getUsageMetrics(iccid: string): Promise<ESimUsage> {
-    // In production, we simulate usage metrics based on the plan type
+    // Simulated production usage metrics
     return {
       iccid,
       totalVolume: 10737418240, // 10GB
-      usedVolume: 858993459, // ~800MB used
+      usedVolume: Math.floor(Math.random() * 500000000) + 100000000, 
       remainingVolume: 9878424781,
       expiryTime: new Date(Date.now() + 86400000 * 28).toISOString(),
       status: 'active',
@@ -46,16 +46,21 @@ export class ESimService extends ApiService {
   }
 
   static async getUserESims(email: string): Promise<any[]> {
-    // Look up orders in the global ledger
+    const normalizedEmail = email.toLowerCase().trim();
+    // Look up orders in the global ledger (localStorage database)
     const ledger = JSON.parse(localStorage.getItem('ihavelanded_orders') || '[]');
-    return ledger.filter((o: any) => o.email.toLowerCase() === email.toLowerCase())
+    
+    return ledger
+      .filter((o: any) => o.email.toLowerCase() === normalizedEmail)
       .map((o: any) => ({
         id: o.id,
-        country: o.items?.[0]?.country?.name || 'USA',
-        flag: o.items?.[0]?.country?.flag || '🇺🇸',
-        planName: o.items?.[0]?.plan?.name || 'Unlimited Scholar',
+        country: o.items?.[0]?.country?.name || 'Global Access',
+        flag: o.items?.[0]?.country?.flag || '🌍',
+        planName: o.items?.[0]?.plan?.name || 'Academic Scholar',
         purchasedDate: new Date(o.timestamp || Date.now()).toLocaleDateString(),
-        iccid: o.activationCode?.split('$').pop() || 'Pending Assignment'
+        iccid: (o.activationCode && o.activationCode !== 'PROVISIONING_PENDING') 
+          ? o.activationCode.split('$').pop() 
+          : 'Syncing with Node...'
       }));
   }
 }

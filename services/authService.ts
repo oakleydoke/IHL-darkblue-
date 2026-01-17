@@ -15,36 +15,49 @@ export class AuthService {
   }
 
   /**
-   * Saves a verified order to the global ledger so it persists even before account creation.
+   * Saves a verified order to the global ledger.
+   * This is our "database" for all transactions on this device.
    */
   static saveOrderToLedger(order: any): void {
     const orders = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
-    // Prevent duplicates
-    if (!orders.find((o: any) => o.id === order.id)) {
-      orders.push({
-        ...order,
-        timestamp: new Date().toISOString()
-      });
-      localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
+    const normalizedEmail = order.email.toLowerCase().trim();
+    
+    // Check if order already exists in ledger
+    const existingIdx = orders.findIndex((o: any) => o.id === order.id);
+    const orderData = {
+      ...order,
+      email: normalizedEmail,
+      timestamp: order.timestamp || new Date().toISOString()
+    };
+
+    if (existingIdx === -1) {
+      orders.push(orderData);
+    } else {
+      // Update existing record (e.g. if QR code arrived later)
+      orders[existingIdx] = orderData;
     }
     
-    // If user is already logged in, link it to their account object too
+    localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
+    
+    // If user is logged in, link it to their account object automatically
     const activeEmail = localStorage.getItem('ihavelanded_active_email');
-    if (activeEmail) {
+    if (activeEmail && activeEmail.toLowerCase() === normalizedEmail) {
       this.addOrderToUser(activeEmail, order.id);
     }
   }
 
   static register(email: string, password: string, firstOrderId: string): void {
     const users = this.getUsers();
-    // Gather all historical orders for this email from the ledger
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Gather all historical orders for this email from our device ledger
     const ledger = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const userOrders = ledger
-      .filter((o: any) => o.email.toLowerCase() === email.toLowerCase())
+      .filter((o: any) => o.email.toLowerCase() === normalizedEmail)
       .map((o: any) => o.id);
 
-    users[email] = {
-      email,
+    users[normalizedEmail] = {
+      email: normalizedEmail,
       password,
       orderIds: Array.from(new Set([...userOrders, firstOrderId]))
     };
@@ -53,9 +66,10 @@ export class AuthService {
 
   static addOrderToUser(email: string, orderId: string): void {
     const users = this.getUsers();
-    if (users[email]) {
-      if (!users[email].orderIds.includes(orderId)) {
-        users[email].orderIds.push(orderId);
+    const normalizedEmail = email.toLowerCase().trim();
+    if (users[normalizedEmail]) {
+      if (!users[normalizedEmail].orderIds.includes(orderId)) {
+        users[normalizedEmail].orderIds.push(orderId);
         localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
       }
     }
@@ -63,7 +77,8 @@ export class AuthService {
 
   static login(email: string, password: string): UserAccount | null {
     const users = this.getUsers();
-    const user = users[email];
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = users[normalizedEmail];
     if (user && user.password === password) {
       return user;
     }

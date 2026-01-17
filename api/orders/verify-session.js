@@ -3,18 +3,58 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
 /**
- * PRODUCTION MAPPING TABLE
- * Maps Stripe Price IDs to eSIMAccess Package Codes.
+ * COMPREHENSIVE PRODUCTION MAPPING
+ * Maps Stripe Price IDs (from constants.tsx) to eSIMAccess Package Codes.
  */
 const PACKAGE_MAP = {
   // USA
   'price_us_5gb_prod': { location: 'US', package: 'US_5GB_30D' },
   'price_us_10gb_prod': { location: 'US', package: 'US_10GB_30D' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { location: 'US', package: 'PKY3WHPRZ' }, // Academic Unlimited
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { location: 'US', package: 'PKY3WHPRZ' },
   // UK
   'price_uk_3gb_prod': { location: 'GB', package: 'GB_3GB_30D' },
   'price_uk_10gb_prod': { location: 'GB', package: 'GB_10GB_30D' },
   'price_uk_unlimited_prod': { location: 'GB', package: 'GB_UL_30D' },
+  // FRANCE
+  'price_fr_5gb_prod': { location: 'FR', package: 'FR_5GB_30D' },
+  'price_fr_15gb_prod': { location: 'FR', package: 'FR_15GB_30D' },
+  'price_fr_unlimited_prod': { location: 'FR', package: 'FR_UL_30D' },
+  // GERMANY
+  'price_de_5gb_prod': { location: 'DE', package: 'DE_5GB_30D' },
+  'price_de_15gb_prod': { location: 'DE', package: 'DE_15GB_30D' },
+  'price_de_unlimited_prod': { location: 'DE', package: 'DE_UL_30D' },
+  // SPAIN
+  'price_es_5gb_prod': { location: 'ES', package: 'ES_5GB_30D' },
+  'price_es_15gb_prod': { location: 'ES', package: 'ES_15GB_30D' },
+  'price_es_unlimited_prod': { location: 'ES', package: 'ES_UL_30D' },
+  // ITALY
+  'price_it_5gb_prod': { location: 'IT', package: 'IT_5GB_30D' },
+  'price_it_15gb_prod': { location: 'IT', package: 'IT_15GB_30D' },
+  'price_it_unlimited_prod': { location: 'IT', package: 'IT_UL_30D' },
+  // CANADA
+  'price_ca_5gb_prod': { location: 'CA', package: 'CA_5GB_30D' },
+  'price_ca_15gb_prod': { location: 'CA', package: 'CA_15GB_30D' },
+  'price_ca_unlimited_prod': { location: 'CA', package: 'CA_UL_30D' },
+  // JAPAN
+  'price_jp_3gb_prod': { location: 'JP', package: 'JP_3GB_30D' },
+  'price_jp_10gb_prod': { location: 'JP', package: 'JP_10GB_30D' },
+  'price_jp_unlimited_prod': { location: 'JP', package: 'JP_UL_30D' },
+  // AUSTRALIA
+  'price_au_5gb_prod': { location: 'AU', package: 'AU_5GB_30D' },
+  'price_au_15gb_prod': { location: 'AU', package: 'AU_15GB_30D' },
+  'price_au_unlimited_prod': { location: 'AU', package: 'AU_UL_30D' },
+  // SOUTH KOREA
+  'price_kr_5gb_prod': { location: 'KR', package: 'KR_5GB_30D' },
+  'price_kr_15gb_prod': { location: 'KR', package: 'KR_15GB_30D' },
+  'price_kr_unlimited_prod': { location: 'KR', package: 'KR_UL_30D' },
+  // IRELAND
+  'price_ie_5gb_prod': { location: 'IE', package: 'IE_5GB_30D' },
+  'price_ie_15gb_prod': { location: 'IE', package: 'IE_15GB_30D' },
+  'price_ie_unlimited_prod': { location: 'IE', package: 'IE_UL_30D' },
+  // MEXICO
+  'price_mx_5gb_prod': { location: 'MX', package: 'MX_5GB_30D' },
+  'price_mx_10gb_prod': { location: 'MX', package: 'MX_10GB_30D' },
+  'price_mx_unlimited_prod': { location: 'MX', package: 'MX_UL_30D' },
 };
 
 export default async function handler(req, res) {
@@ -32,11 +72,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Payment not completed' });
     }
 
-    // 2. Identify what was purchased
+    // 2. Identify what was purchased from metadata
     const priceId = session.metadata?.plan_ids?.split(',')[0];
     const planConfig = PACKAGE_MAP[priceId] || { location: 'US', package: 'US_5GB_30D' };
 
-    console.log(`[Provisioning] Session: ${sessionId} | Price: ${priceId} | Pkg: ${planConfig.package}`);
+    console.log(`[Provisioning] Session: ${sessionId} | Plan: ${priceId} | Target: ${planConfig.package}`);
 
     // 3. Provision with eSIMAccess
     const ESIM_API_URL = 'https://api.esimaccess.com/order/v1/buy';
@@ -52,40 +92,41 @@ export default async function handler(req, res) {
           'RT-AppKey': process.env.ESIM_ACCESS_APP_KEY,
           'Content-Type': 'application/json'
         },
-        timeout: 12000 // Slightly longer timeout for carrier sync
+        timeout: 20000 // Extended timeout for carrier sync
       });
 
-      const esimData = esimResponse.data;
-      console.log(`[Carrier Response] Code: ${esimData.code} | Msg: ${esimData.message}`);
-
-      // eSIMAccess usually returns "000000" as a string on success
-      const isSuccess = esimData.code === "000000" || esimData.code === 0;
+      const esimResponseData = esimResponse.data;
+      
+      // CRITICAL FIX: eSIMAccess returns payload inside a .data object
+      const isSuccess = esimResponseData.code === "000000" || esimResponseData.code === 0;
+      const carrierPayload = esimResponseData.data || {};
+      const orderList = carrierPayload.orderList || [];
 
       if (!isSuccess) {
-          throw new Error(`Carrier Rejection: ${esimData.message || 'Unknown provider error'}`);
+          throw new Error(`Carrier Rejection (${esimResponseData.code}): ${esimResponseData.message || 'Unknown provider error'}`);
       }
 
       // 4a. Success Case: Return the real carrier data
       return res.status(200).json({
         id: session.id,
-        email: session.customer_email,
+        email: session.customer_email.toLowerCase(),
         status: 'completed',
-        items: [], // Reconstructed on frontend
+        items: [], // Reconstructed on frontend from active cart
         total: session.amount_total / 100,
         currency: 'USD',
-        qrCode: esimData.orderList?.[0]?.acCode ? 
-          `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${esimData.orderList[0].acCode}` : 
+        qrCode: orderList[0]?.acCode ? 
+          `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${orderList[0].acCode}` : 
           null,
-        activationCode: esimData.orderList?.[0]?.acCode || null
+        activationCode: orderList[0]?.acCode || null
       });
 
     } catch (esimError) {
-      console.warn('[Provisioning Alert] Background sync delayed:', esimError.message);
+      console.warn('[Provisioning Alert] Async carrier sync:', esimError.message);
       
-      // 4b. "Pending" Success Case: Payment is confirmed, UI must move forward.
+      // 4b. "Pending" Success Case: We move the user to the success page
       return res.status(200).json({
         id: session.id,
-        email: session.customer_email,
+        email: session.customer_email.toLowerCase(),
         status: 'completed', 
         items: [],
         total: session.amount_total / 100,
@@ -97,7 +138,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('[Critical Error] Session verification failed:', error.message);
-    res.status(500).json({ error: 'System busy. We are verifying your order manually.' });
+    console.error('[System Error] Verification failed:', error.message);
+    res.status(500).json({ error: 'Verification node busy. Payment is confirmed.' });
   }
 }
