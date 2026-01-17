@@ -16,7 +16,7 @@ export const TOP_COUNTRIES: Country[] = [
     plans: [
       { id: 'us-1', name: 'Student Essential', data: '5GB', validity: '30 Days', price: 15, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_us_5gb_prod' },
       { id: 'us-2', name: 'Student Pro', data: '10GB', validity: '30 Days', price: 25, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_us_10gb_prod' },
-      { id: 'us-3', name: 'Academic Unlimited', data: 'Unlimited', validity: '30 Days', price: 45, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_1SpHjJCPrRzENMHluk7SSbZi' },
+      { id: 'us-3', name: 'Academic Unlimited', data: 'Unlimited', validity: '30 Days', price: 45, currency: 'USD', coverage: 'USA (Verizon/T-Mobile)', stripePriceId: 'price_1SqhSYCPrRzENMHl0tebNgtr' },
     ]
   },
   {
