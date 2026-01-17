@@ -39,14 +39,36 @@ const OrderConfirmation: React.FC<OrderConfirmationProps> = ({ order, onBackToHo
           </div>
 
           <div className="p-12">
-            <div className="bg-slate-50 rounded-[2rem] p-8 mb-10 text-center border border-slate-100">
-              <div className="bg-white p-6 rounded-3xl inline-block shadow-lg border border-slate-100 mb-8 transform hover:scale-105 transition-transform">
-                <img src={order.qrCode} alt="Activation QR Code" className="w-56 h-56" />
-              </div>
-              <h3 className="text-xl font-black text-slate-900 mb-3">Install Your eSIM</h3>
-              <p className="text-slate-500 text-sm max-w-xs mx-auto font-medium leading-relaxed">
-                Scan this with your phone camera. Full instructions sent to <span className="text-slate-900 font-bold">{order.email}</span>
-              </p>
+            <div className="bg-slate-50 rounded-[2rem] p-8 mb-10 text-center border border-slate-100 min-h-[400px] flex flex-col justify-center">
+              {order.qrCode ? (
+                <>
+                  <div className="bg-white p-6 rounded-3xl inline-block shadow-lg border border-slate-100 mb-8 transform hover:scale-105 transition-transform">
+                    <img src={order.qrCode} alt="Activation QR Code" className="w-56 h-56" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-3">Install Your eSIM</h3>
+                  <p className="text-slate-500 text-sm max-w-xs mx-auto font-medium leading-relaxed">
+                    Scan this with your phone camera. Full instructions sent to <span className="text-slate-900 font-bold">{order.email}</span>
+                  </p>
+                </>
+              ) : (
+                <div className="space-y-6 py-10">
+                  <div className="relative w-32 h-32 mx-auto">
+                    <div className="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-airalo border-t-transparent rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-slate-300">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V3.545M12.75 21h7.5V10.75M2.25 21h1.5m18 0h-18M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205 3 1m1.5-1.5-1.5.545m-1.5 13.5v-8.875c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125V21h-7.5Z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900">Provisioning Carrier Node</h3>
+                  <p className="text-slate-500 text-sm max-w-xs mx-auto font-medium leading-relaxed">
+                    Your payment is verified. We are syncing your signature with the local carrier networks. 
+                    <br/><br/>
+                    Your activation code will arrive at <span className="text-slate-900 font-bold">{order.email}</span> within 5-10 minutes.
+                  </p>
+                </div>
+              )}
             </div>
 
             <button 
