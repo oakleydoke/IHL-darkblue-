@@ -14,32 +14,20 @@ export class AuthService {
     return data ? JSON.parse(data) : {};
   }
 
-  /**
-   * Saves a verified order to the global ledger.
-   * This is our "database" for all transactions on this device.
-   */
   static saveOrderToLedger(order: any): void {
     const orders = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const normalizedEmail = order.email.toLowerCase().trim();
     
-    // Check if order already exists in ledger
-    const existingIdx = orders.findIndex((o: any) => o.id === order.id);
-    const orderData = {
-      ...order,
-      email: normalizedEmail,
-      timestamp: order.timestamp || new Date().toISOString()
-    };
-
-    if (existingIdx === -1) {
-      orders.push(orderData);
-    } else {
-      // Update existing record (e.g. if QR code arrived later)
-      orders[existingIdx] = orderData;
+    if (!orders.find((o: any) => o.id === order.id)) {
+      orders.push({
+        ...order,
+        email: normalizedEmail,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
     }
     
-    localStorage.setItem(this.ORDERS_KEY, JSON.stringify(orders));
-    
-    // If user is logged in, link it to their account object automatically
+    // Auto-link to existing user if they happen to be logged in
     const activeEmail = localStorage.getItem('ihavelanded_active_email');
     if (activeEmail && activeEmail.toLowerCase() === normalizedEmail) {
       this.addOrderToUser(activeEmail, order.id);
@@ -50,7 +38,6 @@ export class AuthService {
     const users = this.getUsers();
     const normalizedEmail = email.toLowerCase().trim();
     
-    // Gather all historical orders for this email from our device ledger
     const ledger = JSON.parse(localStorage.getItem(this.ORDERS_KEY) || '[]');
     const userOrders = ledger
       .filter((o: any) => o.email.toLowerCase() === normalizedEmail)
@@ -79,6 +66,8 @@ export class AuthService {
     const users = this.getUsers();
     const normalizedEmail = email.toLowerCase().trim();
     const user = users[normalizedEmail];
+    
+    // Support "guest login" for testing: if they have orders but no password, we still need a full account
     if (user && user.password === password) {
       return user;
     }
