@@ -3,10 +3,18 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const crypto = require('crypto');
 
+/**
+ * eSIMAccess V1/V2 CATALOG MAPPING
+ * You can use the "Slug" or the "Package Code" from your portal.
+ * Ensure the item is "Favorited" (Hearted) in your eSIMAccess Offer List.
+ */
 const CATALOG_MAP = {
+  // USA - Examples using both Slugs and technical Package IDs
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'united-states-5gb-30d' },
   'price_us_10gb_prod': { locationCode: 'US', packageCode: 'united-states-10gb-30d' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'united-states-unlimited-daily' },
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'USCA-2_1_Daily' }, // Using your specific technical ID
+  
+  // UK
   'price_uk_3gb_prod': { locationCode: 'GB', packageCode: 'united-kingdom-3gb-30d' },
   'price_uk_10gb_prod': { locationCode: 'GB', packageCode: 'united-kingdom-10gb-30d' },
   'price_uk_unlimited_prod': { locationCode: 'GB', packageCode: 'united-kingdom-unlimited-30d' },
@@ -38,6 +46,8 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json'
     };
 
+    console.log(`[PROVISIONER] Attempting buy for ${planConfig.packageCode} (Order: ${session.id})`);
+
     // STAGE 1: Purchase Order
     const buyResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
       locationCode: planConfig.locationCode,
@@ -50,14 +60,16 @@ export default async function handler(req, res) {
     const buyData = buyResponse.data;
     
     if (buyData.code !== '000000' && buyData.code !== 0) {
+       console.error(`[PROVISIONER] Provider Rejected: ${buyData.code} - ${buyData.message}`);
        return res.status(200).json({
           status: 'error',
           message: buyData.message || 'Provider Rejected Order',
-          activationCode: `ERROR: ${buyData.code}`
+          activationCode: `ERROR: ${buyData.code} (${buyData.message})`,
+          debug: { sentCode: planConfig.packageCode }
        });
     }
 
-    // STAGE 2: Query Order Details (To get ICCID and detailed status)
+    // STAGE 2: Query Order Details
     const orderNo = buyData.obj?.orderNo;
     const queryResponse = await axios.get(`https://api.esimaccess.com/order/v1/query?orderNo=${orderNo}`, { headers });
     const queryData = queryResponse.data;
@@ -76,7 +88,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[SERVER] Fatal:', error.message);
-    res.status(500).json({ error: 'System processing failure.' });
+    console.error('[SERVER] Fatal API Error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'System processing failure. Please contact support.' });
   }
 }
