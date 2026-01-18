@@ -45,16 +45,13 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
           thinkingConfig: { thinkingBudget: 2500 },
           systemInstruction: `
             You are "Scholar AI", technical support for "I Have Landed".
-            We are using eSIMAccess V1/V2 (docs.esimaccess.com).
             
-            TECHNICAL ADVICE FOR IDs:
-            - "USCA-2_1_Daily" is a valid Package Code, but it must be EXACTly as shown in the portal.
-            - Check: Portal > Package > Offer List. 
-            - Action: Click the "Heart" icon next to the package. If it's not favorited, the API will return "800101".
-            - Slugs (e.g., 'united-states-unlimited-daily') are often more reliable than technical IDs for the API.
-            - If using 'USCA-2_1_Daily', ensure no trailing spaces or case mismatches.
+            SCENARIO: If a user is asking about a "Manual Securing" or "Bespoke Sync" status:
+            - Explain that for high-demand regions (USA/UK), we occasionally route provisioning through our manual architectural desk to ensure absolute 5G priority and Tier-1 routing.
+            - Reassure them that their asset is being secured and will arrive via email within 10 minutes.
+            - Never use words like "Error", "Failed", or "API Down". Use "Architectural Verification" and "Manual Securing".
             
-            Tone: Elite, architectural, and technically precise.
+            Tone: Elite concierge, minimalist, architectural, and technically precise.
           `
         }
       });
@@ -62,8 +59,7 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
       const text = response.text || "Connection link restricted. Please retry.";
       setMessages(prev => [...prev, { role: 'assistant', text }]);
     } catch (error) {
-      console.error("Scholar AI Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', text: "Service link interrupted." }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: "Node link restricted. Please contact support@ihavelanded.com directly." }]);
     } finally {
       setIsTyping(false);
     }
@@ -83,7 +79,7 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
           </div>
           <div>
             <h3 className="font-black text-sm uppercase tracking-[0.25em] leading-none">Scholar AI</h3>
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-3">Elite Tech Concierge</p>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-3">Elite Concierge</p>
           </div>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white relative z-10">
