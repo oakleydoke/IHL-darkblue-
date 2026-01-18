@@ -6,6 +6,9 @@ const axios = require('axios');
  * eSIMAccess Mapping
  * locationCode: ISO alpha-2 country code (e.g., 'US', 'GB')
  * packageCode: Unique identifier from the eSIMAccess catalog.
+ * 
+ * NOTE: If your codes differ, find them in your eSIMAccess portal under 
+ * "Package" -> "Package List".
  */
 const PACKAGE_MAP = {
   // Developer Testing
@@ -64,14 +67,10 @@ export default async function handler(req, res) {
     }
 
     const priceId = session.metadata?.plan_ids?.split(',')[0];
-    const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_5GB_30D' };
+    const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_1GB_7D' };
     const customerEmail = session.customer_email.toLowerCase();
 
     try {
-      /**
-       * Purchase Request to eSIMAccess
-       * Ensures quantity is 1 and externalOrderNo is unique.
-       */
       const esimResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
         locationCode: planConfig.locationCode,
         packageCode: planConfig.packageCode,
@@ -88,9 +87,6 @@ export default async function handler(req, res) {
 
       const response = esimResponse.data;
       const isSuccess = response.code === "000000" || response.code === 0;
-      
-      // Extract activation code (e.g., LPA:1$...) from provider response
-      const activationCode = response.obj?.activationCode || 'PROVISIONING_PENDING';
 
       return res.status(200).json({
         id: session.id,
@@ -98,7 +94,7 @@ export default async function handler(req, res) {
         status: 'completed',
         total: session.amount_total / 100,
         currency: 'USD',
-        activationCode: isSuccess ? activationCode : 'PROVISIONING_PENDING'
+        activationCode: isSuccess ? (response.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : 'PROVISIONING_PENDING'
       });
 
     } catch (esimError) {
