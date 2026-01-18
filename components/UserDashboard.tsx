@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { ESimService, ESimUsage } from '../services/eSimService';
+import { ESimService, ESimUsage, RawPackage } from '../services/eSimService';
 
 interface UserDashboardProps {
   email: string;
@@ -10,8 +10,11 @@ interface UserDashboardProps {
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose }) => {
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'usage' | 'catalog'>('usage');
   const [esims, setEsims] = useState<any[]>([]);
+  const [catalog, setCatalog] = useState<RawPackage[]>([]);
   const [selectedUsage, setSelectedUsage] = useState<ESimUsage | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -20,10 +23,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
         const data = await ESimService.getUserESims(email);
         setEsims(data);
         if (data.length > 0) {
-          // Fetch metrics for the first/active eSIM
           const usage = await ESimService.getUsageMetrics(data[0].iccid);
           setSelectedUsage(usage);
         }
+
+        // Pre-fetch catalog for developer discovery
+        const rawCatalog = await ESimService.getRawCatalog().catch(() => []);
+        setCatalog(rawCatalog);
       } catch (err) {
         console.error("Dashboard Fetch Error:", err);
       } finally {
@@ -32,6 +38,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
     };
     fetchData();
   }, [email]);
+
+  const filteredCatalog = catalog.filter(pkg => 
+    pkg.locationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pkg.packageCode.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const formatGB = (bytes: number) => (bytes / (1024 * 1024 * 1024)).toFixed(2);
   const domain = email.split('@')[1]?.replace('.edu', '').toUpperCase() || 'SCHOLAR';
@@ -56,6 +67,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
           </div>
           <div className="flex items-center gap-4">
             <button 
+              onClick={() => setActiveTab(activeTab === 'usage' ? 'catalog' : 'usage')}
+              className="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all text-white"
+            >
+              {activeTab === 'usage' ? 'Discover Catalog' : 'Telemetry View'}
+            </button>
+            <button 
               onClick={onLogout}
               className="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all"
             >
@@ -77,8 +94,73 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
              <div className="w-20 h-20 border-[3px] border-airalo border-t-transparent rounded-full animate-spin mb-8"></div>
              <p className="font-black text-slate-900 uppercase tracking-[0.4em] text-[10px]">Syncing Telemetry...</p>
           </div>
+        ) : activeTab === 'catalog' ? (
+          <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+            <div className="p-10 md:p-16 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-8 bg-slate-50/50">
+              <div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tight">Catalog Discovery</h3>
+                <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] mt-3">Live Carrier Inventory • RT-AppKey Linked</p>
+              </div>
+              <input 
+                type="text" 
+                placeholder="Filter by Country or Code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-white border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold text-slate-800 focus:ring-4 focus:ring-airalo/10 outline-none w-full md:w-80"
+              />
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-12 py-6">Location</th>
+                    <th className="px-12 py-6">Package Name</th>
+                    <th className="px-12 py-6">Data / Validity</th>
+                    <th className="px-12 py-6">Package Code (Use in Map)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredCatalog.map((pkg) => (
+                    <tr key={pkg.packageCode} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="px-12 py-8">
+                        <p className="font-black text-slate-900">{pkg.locationName}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{pkg.locationCode}</p>
+                      </td>
+                      <td className="px-12 py-8 font-bold text-slate-800">{pkg.packageName}</td>
+                      <td className="px-12 py-8">
+                        <p className="font-black text-airalo">{pkg.dataAmount}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{pkg.expiryDay} Days</p>
+                      </td>
+                      <td className="px-12 py-8">
+                        <div className="flex items-center gap-4">
+                          <code className="bg-slate-900 text-emerald-400 px-4 py-2 rounded-xl text-xs font-mono font-bold">
+                            {pkg.packageCode}
+                          </code>
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(pkg.packageCode);
+                              alert(`Copied: ${pkg.packageCode}`);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-airalo font-black text-[9px] uppercase tracking-widest hover:underline"
+                          >
+                            Copy Code
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredCatalog.length === 0 && (
+                <div className="p-32 text-center text-slate-400 italic">
+                  No packages found for your API key. Ensure you have subscribed to packages in the eSIMAccess Dashboard.
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
-          <div className="grid lg:grid-cols-3 gap-10">
+          <div className="grid lg:grid-cols-3 gap-10 animate-in slide-in-from-bottom-4 duration-500">
             <div className="lg:col-span-2 space-y-10">
               {selectedUsage ? (
                 <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
