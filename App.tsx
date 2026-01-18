@@ -12,11 +12,13 @@ import Cart from './components/Cart';
 import OrderConfirmation from './components/OrderConfirmation';
 import Footer from './components/Footer';
 import ScholarAI from './components/ScholarAI';
+import UserDashboard from './components/UserDashboard';
+import LoginModal from './components/LoginModal';
 import { ESimService } from './services/eSimService';
 import { StripeService } from './services/stripeService';
-import { ENV } from './config';
+import { AuthService } from './services/authService';
 
-type CheckoutState = 'idle' | 'preparing_stripe' | 'esim_provisioning';
+type CheckoutState = 'idle' | 'preparing_stripe' | 'esim_provisioning' | 'dashboard';
 
 const App: React.FC = () => {
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
@@ -28,16 +30,9 @@ const App: React.FC = () => {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('idle');
   const [showAISupport, setShowAISupport] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
-
-  useEffect(() => {
-    const shouldLock = isCartOpen || !!selectedCountry || showAISupport || checkoutState !== 'idle';
-    document.body.style.overflow = shouldLock ? 'hidden' : 'unset';
-  }, [isCartOpen, selectedCountry, showAISupport, checkoutState]);
-
-  useEffect(() => {
-    localStorage.setItem('ihavelanded_cart', JSON.stringify(cartItems));
-  }, [cartItems]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -47,42 +42,30 @@ const App: React.FC = () => {
     if (status === 'success' && sessionId) {
       handlePostPaymentSuccess(sessionId);
       window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (status === 'cancelled') {
-      setIsCartOpen(true);
-      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
   const handlePostPaymentSuccess = async (sessionId: string) => {
     setCheckoutState('esim_provisioning');
     try {
-      // Cinematic delay to ensure provider node sync
-      await new Promise(resolve => setTimeout(resolve, 3500));
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
-      const finalizedOrder = {
-        ...order,
-        items: [...cartItems]
-      };
+      // Automatic Account Creation/Update
+      if (order.email) {
+        if (!AuthService.userExists(order.email)) {
+          AuthService.register(order.email, 'scholar123', order.id);
+        } else {
+          AuthService.addOrderToUser(order.email, order.id);
+        }
+        setLoggedInUser(order.email);
+      }
 
-      setCurrentOrder(finalizedOrder);
+      setCurrentOrder(order);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
     } catch (error) {
-      console.warn("API Node Error:", error.message);
-      // Fallback display if provisioning is simply delayed
-      const fallbackOrder: Order = {
-        id: sessionId.substring(sessionId.length - 12).toUpperCase(),
-        email: pendingEmail || 'Scholar Session',
-        items: [...cartItems],
-        total: cartItems.reduce((s, i) => s + i.plan.price, 0),
-        currency: 'USD' as any,
-        status: 'completed',
-        activationCode: 'PROVISIONING_PENDING'
-      };
-      
-      setCurrentOrder(fallbackOrder);
-      setCartItems([]);
+      console.error("Provisioning Error:", error);
+      alert("Order processed but fulfillment is delayed. Please check your email or contact support.");
     } finally {
       setCheckoutState('idle');
     }
@@ -92,25 +75,24 @@ const App: React.FC = () => {
     setPendingEmail(email);
     setIsCartOpen(false);
     setCheckoutState('preparing_stripe');
-    
     try {
       await StripeService.redirectToCheckout(cartItems, email);
     } catch (error: any) {
-      console.error('Stripe Redirect Error:', error);
       setCheckoutState('idle');
-      setIsCartOpen(true);
-      alert(`Payment Gateway Error: ${error.message}`);
+      alert(`Payment Error: ${error.message}`);
     }
   };
 
   const resetFlow = () => {
     setCurrentOrder(null);
     setSelectedCountry(null);
-    setPendingEmail('');
+    setCheckoutState('idle');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const subtotal = useMemo(() => cartItems.reduce((sum, item) => sum + item.plan.price, 0), [cartItems]);
+  if (checkoutState === 'dashboard' && loggedInUser) {
+    return <UserDashboard email={loggedInUser} onLogout={() => { setLoggedInUser(null); setCheckoutState('idle'); }} onClose={() => setCheckoutState('idle')} />;
+  }
 
   if (currentOrder) {
     return <OrderConfirmation order={currentOrder} onBackToHome={resetFlow} />;
@@ -120,21 +102,19 @@ const App: React.FC = () => {
     <div className="flex flex-col min-h-screen selection:bg-airalo/20 bg-white antialiased">
       <Header
         cartCount={cartItems.length}
-        onCartClick={() => { setIsCartOpen(true); setShowAISupport(false); }}
+        onCartClick={() => setIsCartOpen(true)}
         onHomeClick={() => resetFlow()}
-        isLoggedIn={false}
-        onLogin={() => {}}
-        onDashboardClick={() => {}}
+        isLoggedIn={!!loggedInUser}
+        onLogin={() => setShowLogin(true)}
+        onDashboardClick={() => setCheckoutState('dashboard')}
       />
 
-      <main className={`flex-grow transition-all duration-700 ${checkoutState !== 'idle' ? 'blur-md scale-[0.98]' : 'blur-0 scale-100'}`}>
-        <div className="animate-in fade-in duration-1000">
-          <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
-          <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
-          <HowItWorks />
-          <Blog />
-          <EnterToWin />
-        </div>
+      <main className={`flex-grow transition-all duration-700 ${checkoutState !== 'idle' ? 'blur-md' : ''}`}>
+        <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
+        <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
+        <HowItWorks />
+        <Blog />
+        <EnterToWin />
       </main>
 
       <Footer />
@@ -159,32 +139,25 @@ const App: React.FC = () => {
         onCheckout={handleCheckout}
       />
 
+      {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLoginSuccess={(email) => { setLoggedInUser(email); setCheckoutState('dashboard'); }} />}
+      <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} userEmail={loggedInUser} />
+
+      {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
+        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700">
+           <div className="w-24 h-24 border-4 border-airalo border-t-transparent rounded-full animate-spin mb-8"></div>
+           <h2 className="text-2xl font-black uppercase tracking-widest italic">Syncing with Carrier</h2>
+           <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Authorized Secure Node Handshake...</p>
+        </div>
+      )}
+
       <button
-        onClick={() => { setShowAISupport(true); setIsCartOpen(false); }}
-        className="fixed bottom-8 right-8 w-16 h-16 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-airalo transition-all z-[180] group ring-4 ring-white active:scale-90"
-        aria-label="Support Concierge"
+        onClick={() => setShowAISupport(true)}
+        className="fixed bottom-8 left-8 w-16 h-16 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-airalo transition-all z-[180]"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 group-hover:scale-110 transition-transform">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
           <path d="M12 2C6.477 2 2 6.477 2 12c0 1.891.527 3.653 1.438 5.155l-1.353 4.057a1 1 0 001.265 1.265l4.057-1.353A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" />
         </svg>
       </button>
-
-      <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} />
-
-      {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
-        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700 text-center">
-           <div className="relative w-64 h-64 mb-16">
-            <div className="absolute inset-0 border-[2px] border-white/5 rounded-full"></div>
-            <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin [animation-duration:1.2s]"></div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-               <svg className="w-16 h-16 text-white mb-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo animate-pulse">Carrier Sync</span>
-            </div>
-          </div>
-          <h2 className="text-4xl font-black uppercase tracking-tighter italic">Provisioning Connection</h2>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Authorized Secure Tier-1 Node Handshake...</p>
-        </div>
-      )}
     </div>
   );
 };
