@@ -20,23 +20,23 @@ export class ESimService extends ApiService {
       if (!response.ok) {
         if (contentType && contentType.includes("application/json")) {
           const errorData = await response.json();
-          throw new Error(errorData.details || errorData.error || 'Provisioning handshake timeout');
+          throw new Error(errorData.details || errorData.error || 'Provisioning sequence interrupted.');
         } else {
           // Likely a 504 Gateway Timeout from Vercel (HTML page)
-          throw new Error('The carrier network is experiencing high latency. Your payment was successful, please wait 30 seconds and refresh.');
+          throw new Error('Carrier nodes are experiencing high latency. Your asset is being secured in the background. Please remain on this page.');
         }
       }
       
       return await response.json();
     } catch (e: any) {
-      console.error("[ESimService] Session Verification Failed:", e.message);
+      console.error("[ESimService] Handshake Delayed:", e.message);
       throw e;
     }
   }
 
   static async getUsageMetrics(iccid: string): Promise<ESimUsage> {
     const response = await fetch(`${ENV.API_BASE_URL}/esim/usage?iccid=${iccid}`);
-    if (!response.ok) throw new Error('Usage fetch failed');
+    if (!response.ok) throw new Error('Usage telemetry unreachable');
     return await response.json();
   }
 

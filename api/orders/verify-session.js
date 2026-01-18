@@ -14,7 +14,7 @@ const CATALOG_MAP = {
     packageCode: 'PNNLXUOMD' 
   },
   
-  // Production Fallbacks (Ensure these are favorited in eSIMAccess portal)
+  // Production Fallbacks
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'united-states-5gb-30d' },
 };
 
@@ -22,21 +22,18 @@ export default async function handler(req, res) {
   const { sessionId } = req.query;
   if (!sessionId) return res.status(400).json({ error: 'Session ID required' });
 
-  // AccessCode (eSIMAccess) -> ESIM_ACCESS_APP_KEY
-  // SecretKey (eSIMAccess) -> ESIM_ACCESS_APP_SECRET
   const accessCode = process.env.ESIM_ACCESS_APP_KEY;
   const secretKey = process.env.ESIM_ACCESS_APP_SECRET;
 
   if (!accessCode || !secretKey) {
-    console.error('[CRITICAL] Missing eSIMAccess Credentials (AccessCode/SecretKey)');
     return res.status(500).json({ 
       error: 'Connectivity Node Offline', 
-      details: 'Environment variables ESIM_ACCESS_APP_KEY or ESIM_ACCESS_APP_SECRET are not configured.' 
+      details: 'Infrastructure credentials (AccessCode/SecretKey) are not configured.' 
     });
   }
 
   try {
-    // 1. Verify Payment Authenticity
+    // 1. Verify Payment
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.payment_status !== 'paid') {
       return res.status(400).json({ error: 'Payment verification failed' });
@@ -50,7 +47,7 @@ export default async function handler(req, res) {
     
     const customerEmail = session.customer_email.toLowerCase();
 
-    // 2. Security Handshake Generation
+    // 2. Handshake Setup
     const timestamp = Date.now().toString();
     const sign = crypto.createHash('sha256')
       .update(accessCode + secretKey + timestamp)
@@ -63,9 +60,9 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json' 
     };
 
-    console.log(`[HANDSHAKE] Provisioning ${planConfig.packageCode} for ${customerEmail}`);
-
-    // 3. Carrier Provisioning (Short timeout to stay within Vercel's 10s limit)
+    // 3. Provisioning Request
+    // REDUCED TIMEOUT: 5000ms is safer for Vercel's 10s execution limit.
+    // If the carrier node takes > 5s, we return a PENDING status to the UI.
     let buyData;
     try {
       const buyResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
@@ -74,32 +71,30 @@ export default async function handler(req, res) {
         quantity: 1,
         externalOrderNo: session.id,
         email: customerEmail 
-      }, { headers, timeout: 6500 });
+      }, { headers, timeout: 5000 });
       buyData = buyResponse.data;
     } catch (err) {
-      console.warn('[PROVISIONING-DELAY] Carrier node slow. Returning PENDING state.');
+      console.warn('[HANDSHAKE-LATENCY] Carrier node responding slow. Switching to async-sync mode.');
       return res.status(200).json({
         id: session.id,
         email: customerEmail,
         status: 'pending',
-        message: 'Carrier synchronization in progress. Your digital asset will appear shortly.',
-        orderNo: 'SYNCING_IN_BACKGROUND'
+        message: 'Synchronizing with global carrier nodes. Your digital asset is being secured.',
+        orderNo: 'IHL-ASYNC-SYNC'
       });
     }
     
-    // Handle Provider-level Errors (e.g., Insufficient Balance, Non-favorited package)
     if (buyData.code !== '000000' && buyData.code !== 0) {
-       console.error(`[CARRIER-ERROR] ${buyData.code}: ${buyData.message}`);
        return res.status(200).json({
           id: session.id,
           email: customerEmail,
           status: 'error',
-          message: `Provider Node Refusal (${buyData.code}): ${buyData.message}`,
+          message: `Carrier Refusal (${buyData.code}): ${buyData.message}`,
           activationCode: `GATEWAY_ERROR_${buyData.code}`
        });
     }
 
-    // 4. Finalize Manifest
+    // 4. Return provisioned asset
     const initialActivationCode = buyData.obj?.activationCode;
     const initialIccid = buyData.obj?.iccid;
 
@@ -108,7 +103,6 @@ export default async function handler(req, res) {
       email: customerEmail,
       status: initialActivationCode ? 'completed' : 'pending',
       total: session.amount_total / 100,
-      currency: 'USD',
       orderNo: buyData.obj?.orderNo || 'IHL-SYNC-P',
       iccid: initialIccid || 'PROVISIONING',
       activationCode: initialActivationCode,
@@ -117,9 +111,8 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[INFRASTRUCTURE-FATAL]', error.message);
     res.status(500).json({ 
-      error: 'Global Node Handshake Interrupted', 
+      error: 'Infrastructure Handshake Interrupted', 
       details: error.message 
     });
   }
