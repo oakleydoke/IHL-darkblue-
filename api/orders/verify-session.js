@@ -13,7 +13,7 @@ const PACKAGE_MAP = {
   // USA
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'US_5GB_30D' },
   'price_us_10gb_prod': { locationCode: 'US', packageCode: 'US_10GB_30D' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'PKY3WHPRZ' },
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'US_3_Daily' },
   
   // UK
   'price_uk_3gb_prod': { locationCode: 'GB', packageCode: 'GB_3GB_30D' },
