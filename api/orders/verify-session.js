@@ -12,7 +12,7 @@ const CATALOG_MAP = {
   // USA - Examples using both Slugs and technical Package IDs
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'united-states-5gb-30d' },
   'price_us_10gb_prod': { locationCode: 'US', packageCode: 'united-states-10gb-30d' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'USCA-2_1_Daily' }, // Using your specific technical ID
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'PNNLXUOMD' }, // Using your specific technical ID
   
   // UK
   'price_uk_3gb_prod': { locationCode: 'GB', packageCode: 'united-kingdom-3gb-30d' },
