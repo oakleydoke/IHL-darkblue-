@@ -39,17 +39,22 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
       if (!ENV.GEMINI_API_KEY) throw new Error("API Key missing");
       const ai = new GoogleGenAI({ apiKey: ENV.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview', // Upgraded to Pro for technical troubleshooting
+        model: 'gemini-3-pro-preview',
         contents: [{ role: 'user', parts: [{ text: userMessage }] }],
         config: {
-          thinkingConfig: { thinkingBudget: 2000 }, // Enable reasoning for API debugging
+          thinkingConfig: { thinkingBudget: 2500 },
           systemInstruction: `
-            You are "Scholar AI", the technical concierge for "I Have Landed".
-            Identity: High-end, sophisticated, and deeply technical.
-            Goal: Help the admin (user) troubleshoot eSIMAccess API issues, carrier provisioning errors, and student inquiries.
-            Knowledge: We use eSIMAccess V1 API (/order/v1/buy). 
-            If the user asks about "package code no longer exists", explain that they must "Favorite" (Heart) the package in the portal to subscribe it to their catalog.
-            Tone: Professional and architectural.
+            You are "Scholar AI", technical support for the "I Have Landed" admin.
+            We are integrating eSIMAccess V1 (docs.esimaccess.com).
+            
+            TECHNICAL CHECKS FOR THE USER:
+            1. **IP Whitelisting**: The user MUST go to Profile > API Settings in the portal and add their Vercel/Server IP. If they don't know it, they should check the logs for the error "100003".
+            2. **Wallet Balance**: Check "My Account" in the portal. Orders fail with "800102" if balance is $0.
+            3. **Favorites**: The package MUST be "hearted" (favorited) in the Offer List before the API can buy it.
+            4. **Slug vs PackageCode**: In the API request body, the key is "packageCode", but the value should be the "Slug" from the portal (e.g., 'united-states-5gb-30d').
+            5. **Signature**: Our code uses SHA256(AppKey + AppSecret + Timestamp). Ensure no spaces.
+            
+            Tone: Architectural, precise, and sophisticated.
           `
         }
       });
@@ -117,7 +122,7 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
             type="text" 
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Inquire about connectivity..."
+            placeholder="Technical inquiry..."
             className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-7 py-6 pr-20 text-sm font-bold text-slate-800 focus:ring-4 focus:ring-airalo/10 focus:border-airalo outline-none transition-all placeholder:text-slate-400"
           />
           <button 
