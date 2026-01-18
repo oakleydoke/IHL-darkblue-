@@ -23,8 +23,8 @@ export const ENV = {
   STRIPE_PUBLIC_KEY: getEnv('VITE_STRIPE_PUBLIC_KEY', ''),
   GEMINI_API_KEY: getEnv('API_KEY', ''),
   APP_URL: typeof window !== 'undefined' ? window.location.origin : '',
-  // Force mocks to false in production, otherwise allow toggle
-  USE_MOCKS: isProd ? false : (getEnv('VITE_USE_MOCKS', 'true') === 'true'), 
+  // Disable mocks to force real Stripe flow
+  USE_MOCKS: false, 
   API_TIMEOUT: 20000,
   IS_PRODUCTION: isProd
 };

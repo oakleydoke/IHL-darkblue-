@@ -4,17 +4,21 @@ const axios = require('axios');
 
 /**
  * PRODUCTION MAPPING TABLE
- * Map your Stripe Price IDs (from constants.tsx) to eSIMAccess Package Codes.
+ * Map your Stripe Price IDs to eSIMAccess Package Codes.
  */
 const PACKAGE_MAP = {
+  // Test/Sandbox Code
+  'price_sandbox_test': { locationCode: 'US', packageCode: 'US_1GB_7D' },
+
   // USA
-  'price_us_5gb_prod': { location: 'US', package: 'US_5GB_30D' },
-  'price_us_10gb_prod': { location: 'US', package: 'US_10GB_30D' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { location: 'US', package: 'PKY3WHPRZ' },
+  'price_us_5gb_prod': { locationCode: 'US', packageCode: 'US_5GB_30D' },
+  'price_us_10gb_prod': { locationCode: 'US', packageCode: 'US_10GB_30D' },
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'PKY3WHPRZ' },
+  
   // UK
-  'price_uk_3gb_prod': { location: 'GB', package: 'GB_3GB_30D' },
-  'price_uk_10gb_prod': { location: 'GB', package: 'GB_10GB_30D' },
-  'price_uk_unlimited_prod': { location: 'GB', package: 'GB_UL_30D' },
+  'price_uk_3gb_prod': { locationCode: 'GB', packageCode: 'GB_3GB_30D' },
+  'price_uk_10gb_prod': { locationCode: 'GB', packageCode: 'GB_10GB_30D' },
+  'price_uk_unlimited_prod': { locationCode: 'GB', packageCode: 'GB_UL_30D' },
 };
 
 export default async function handler(req, res) {
@@ -32,61 +36,56 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Payment not completed' });
     }
 
-    // 2. Identify what was purchased
+    // 2. Identify what was purchased from Stripe Metadata
     const priceId = session.metadata?.plan_ids?.split(',')[0];
-    const planConfig = PACKAGE_MAP[priceId] || { location: 'US', package: 'US_5GB_30D' };
+    const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_5GB_30D' };
+    const customerEmail = session.customer_email.toLowerCase();
 
-    // 3. Provision with eSIMAccess
+    // 3. Provision with eSIMAccess API
     const ESIM_API_URL = 'https://api.esimaccess.com/order/v1/buy';
     
     try {
       const esimResponse = await axios.post(ESIM_API_URL, {
-        locationCode: planConfig.location,
-        packageCode: planConfig.package,
+        locationCode: planConfig.locationCode,
+        packageCode: planConfig.packageCode,
         quantity: 1,
-        externalOrderNo: session.id
+        externalOrderNo: session.id,
+        email: customerEmail // CRITICAL: This triggers the eSIMAccess automated email to the customer
       }, {
         headers: {
           'RT-AppKey': process.env.ESIM_ACCESS_APP_KEY,
           'Content-Type': 'application/json'
         },
-        timeout: 10000
+        timeout: 15000
       });
 
       const esimData = esimResponse.data;
 
-      // Check if the provider returned an error code (e.g., lack of balance)
-      if (esimData.code !== '000000' && esimData.code !== 0) {
-          throw new Error(`Provider Error: ${esimData.message || 'Unknown carrier error'}`);
-      }
+      // Code "000000" or 0 is Success
+      const isSuccess = esimData.code === '000000' || esimData.code === 0;
 
-      // 4a. Success Case: Return the real carrier data
+      // 4a. Success Case: Return activation data
       return res.status(200).json({
         id: session.id,
-        email: session.customer_email,
+        email: customerEmail,
         status: 'completed',
         items: [],
         total: session.amount_total / 100,
         currency: 'USD',
-        qrCode: esimData.orderList?.[0]?.acCode ? 
-          `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${esimData.orderList[0].acCode}` : 
-          null,
-        activationCode: esimData.orderList?.[0]?.acCode || null
+        activationCode: isSuccess ? (esimData.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : 'PROVISIONING_PENDING'
       });
 
     } catch (esimError) {
-      console.warn('eSIMAccess Provisioning Delayed (Likely Credit/API issue):', esimError.message);
+      console.warn('eSIMAccess Provisioning Delayed:', esimError.message);
       
-      // 4b. "Pending" Success Case: We return 200 so the frontend shows the confirmation page.
-      // We do NOT return an "error" key so the frontend's try/catch doesn't trigger an alert.
+      // 4b. "Delayed" Success Case: We still return 200 so the UI shows success.
       return res.status(200).json({
         id: session.id,
-        email: session.customer_email,
+        email: customerEmail,
         status: 'completed', 
         items: [],
         total: session.amount_total / 100,
         currency: 'USD',
-        qrCode: null, 
         activationCode: 'PROVISIONING_PENDING',
         isPendingCarrier: true
       });
@@ -94,7 +93,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Critical verification error:', error.message);
-    // Only return 500 if Stripe itself fails
-    res.status(500).json({ error: 'System busy. Payment confirmed.' });
+    res.status(500).json({ error: 'Payment verified. Provisioning logic error.' });
   }
 }
