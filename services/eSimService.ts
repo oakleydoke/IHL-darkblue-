@@ -13,14 +13,25 @@ export interface ESimUsage {
 
 export class ESimService extends ApiService {
   static async getOrderByStripeSession(sessionId: string): Promise<Order> {
-    const response = await fetch(`${ENV.API_BASE_URL}/orders/verify-session?sessionId=${sessionId}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.details || errorData.error || 'Provisioning handshake timeout');
+    try {
+      const response = await fetch(`${ENV.API_BASE_URL}/orders/verify-session?sessionId=${sessionId}`);
+      
+      const contentType = response.headers.get("content-type");
+      if (!response.ok) {
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || errorData.error || 'Provisioning handshake timeout');
+        } else {
+          // Likely a 504 Gateway Timeout from Vercel (HTML page)
+          throw new Error('The carrier network is experiencing high latency. Your payment was successful, please wait 30 seconds and refresh.');
+        }
+      }
+      
+      return await response.json();
+    } catch (e: any) {
+      console.error("[ESimService] Session Verification Failed:", e.message);
+      throw e;
     }
-    
-    return await response.json();
   }
 
   static async getUsageMetrics(iccid: string): Promise<ESimUsage> {
@@ -30,7 +41,7 @@ export class ESimService extends ApiService {
   }
 
   static async fetchLivePricing(locationCode: string): Promise<Partial<eSIMPlan>[]> {
-    return []; // Handled by serverless logic in real production
+    return []; 
   }
 
   static async getUserESims(orderIds: string[]): Promise<any[]> {
