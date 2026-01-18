@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { ESimService, ESimUsage, RawPackage } from '../services/eSimService';
+import { ESimService, ESimUsage } from '../services/eSimService';
+import { AuthService } from '../services/authService';
 
 interface UserDashboardProps {
   email: string;
@@ -10,39 +11,30 @@ interface UserDashboardProps {
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose }) => {
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'usage' | 'catalog'>('usage');
   const [esims, setEsims] = useState<any[]>([]);
-  const [catalog, setCatalog] = useState<RawPackage[]>([]);
   const [selectedUsage, setSelectedUsage] = useState<ESimUsage | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      try {
-        const data = await ESimService.getUserESims(email);
+      const users = JSON.parse(localStorage.getItem('ihavelanded_users') || '{}');
+      const user = users[email];
+      
+      if (user && user.orderIds) {
+        const data = await ESimService.getUserESims(user.orderIds);
         setEsims(data);
         if (data.length > 0) {
           const usage = await ESimService.getUsageMetrics(data[0].iccid);
           setSelectedUsage(usage);
         }
-
-        // Pre-fetch catalog for developer discovery
-        const rawCatalog = await ESimService.getRawCatalog().catch(() => []);
-        setCatalog(rawCatalog);
-      } catch (err) {
-        console.error("Dashboard Fetch Error:", err);
-      } finally {
-        setLoading(false);
+      } else {
+        // Fallback for demo/mock purposes if no direct link found
+        const mockUsage = await ESimService.getUsageMetrics('89860400000000000001');
+        setSelectedUsage(mockUsage);
       }
+      setLoading(false);
     };
     fetchData();
   }, [email]);
-
-  const filteredCatalog = catalog.filter(pkg => 
-    pkg.locationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    pkg.packageCode.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const formatGB = (bytes: number) => (bytes / (1024 * 1024 * 1024)).toFixed(2);
   const domain = email.split('@')[1]?.replace('.edu', '').toUpperCase() || 'SCHOLAR';
@@ -67,12 +59,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
           </div>
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setActiveTab(activeTab === 'usage' ? 'catalog' : 'usage')}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all text-white"
-            >
-              {activeTab === 'usage' ? 'Discover Catalog' : 'Telemetry View'}
-            </button>
-            <button 
               onClick={onLogout}
               className="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all"
             >
@@ -94,75 +80,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
              <div className="w-20 h-20 border-[3px] border-airalo border-t-transparent rounded-full animate-spin mb-8"></div>
              <p className="font-black text-slate-900 uppercase tracking-[0.4em] text-[10px]">Syncing Telemetry...</p>
           </div>
-        ) : activeTab === 'catalog' ? (
-          <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-            <div className="p-10 md:p-16 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-8 bg-slate-50/50">
-              <div>
-                <h3 className="text-3xl font-black text-slate-900 tracking-tight">Catalog Discovery</h3>
-                <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] mt-3">Live Carrier Inventory • RT-AppKey Linked</p>
-              </div>
-              <input 
-                type="text" 
-                placeholder="Filter by Country or Code..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold text-slate-800 focus:ring-4 focus:ring-airalo/10 outline-none w-full md:w-80"
-              />
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    <th className="px-12 py-6">Location</th>
-                    <th className="px-12 py-6">Package Name</th>
-                    <th className="px-12 py-6">Data / Validity</th>
-                    <th className="px-12 py-6">Package Code (Use in Map)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filteredCatalog.map((pkg) => (
-                    <tr key={pkg.packageCode} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="px-12 py-8">
-                        <p className="font-black text-slate-900">{pkg.locationName}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{pkg.locationCode}</p>
-                      </td>
-                      <td className="px-12 py-8 font-bold text-slate-800">{pkg.packageName}</td>
-                      <td className="px-12 py-8">
-                        <p className="font-black text-airalo">{pkg.dataAmount}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{pkg.expiryDay} Days</p>
-                      </td>
-                      <td className="px-12 py-8">
-                        <div className="flex items-center gap-4">
-                          <code className="bg-slate-900 text-emerald-400 px-4 py-2 rounded-xl text-xs font-mono font-bold">
-                            {pkg.packageCode}
-                          </code>
-                          <button 
-                            onClick={() => {
-                              navigator.clipboard.writeText(pkg.packageCode);
-                              alert(`Copied: ${pkg.packageCode}`);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-airalo font-black text-[9px] uppercase tracking-widest hover:underline"
-                          >
-                            Copy Code
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filteredCatalog.length === 0 && (
-                <div className="p-32 text-center text-slate-400 italic">
-                  No packages found for your API key. Ensure you have subscribed to packages in the eSIMAccess Dashboard.
-                </div>
-              )}
-            </div>
-          </div>
         ) : (
-          <div className="grid lg:grid-cols-3 gap-10 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-10">
-              {selectedUsage ? (
+              {selectedUsage && (
                 <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
                   <div className="p-10 md:p-16">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
@@ -226,17 +147,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="bg-white rounded-[3rem] shadow-2xl p-24 text-center border border-slate-100">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-2xl font-black text-slate-900 mb-4">No Active Lines</h3>
-                  <p className="text-slate-500 font-medium mb-10 max-w-xs mx-auto">Purchase a plan to see your real-time 5G telemetry here.</p>
-                  <button onClick={onClose} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest">Explore Marketplace</button>
-                </div>
               )}
 
               <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
@@ -246,7 +156,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                 </div>
                 <div className="divide-y divide-slate-100">
                   {esims.length > 0 ? esims.map((sim) => (
-                    <div key={sim.id} className="px-12 py-10 flex items-center justify-between group hover:bg-slate-50 transition-all cursor-default">
+                    <div key={sim.iccid} className="px-12 py-10 flex items-center justify-between group hover:bg-slate-50 transition-all cursor-default">
                       <div className="flex items-center gap-8">
                         <span className="text-4xl group-hover:scale-110 transition-transform">{sim.flag}</span>
                         <div>
@@ -261,7 +171,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                     </div>
                   )) : (
                     <div className="p-20 text-center">
-                       <p className="text-slate-400 font-medium italic">No past transactions found on this account node.</p>
+                       <p className="text-slate-400 font-medium italic">No past transactions on this account node.</p>
                     </div>
                   )}
                 </div>
@@ -274,7 +184,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                 <div className="space-y-6">
                   <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">ICCID Identifier</p>
-                    <p className="text-xs font-mono font-bold text-slate-700 break-all">{selectedUsage?.iccid || 'PENDING_NODE_ALLOCATION'}</p>
+                    <p className="text-xs font-mono font-bold text-slate-700 break-all">{selectedUsage?.iccid || 'NOT_ASSIGNED'}</p>
                   </div>
                   <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Network Access Point</p>
@@ -285,7 +195,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ email, onLogout, onClose 
                   <button className="text-airalo font-black text-[10px] uppercase tracking-[0.3em] hover:text-slate-900 transition-colors flex items-center gap-3">
                     View Network Logs
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                      <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </div>

@@ -17,8 +17,6 @@ import ScholarAI from './components/ScholarAI';
 import StripePaymentSheet from './components/StripePaymentSheet';
 import { ESimService } from './services/eSimService';
 import { StripeService } from './services/stripeService';
-import { AuthService } from './services/authService';
-import { GoogleSheetsService } from './services/googleSheetsService';
 import { ENV } from './config';
 
 type CheckoutState = 'idle' | 'preparing_stripe' | 'local_payment' | 'esim_provisioning';
@@ -39,11 +37,13 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('store');
   const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('ihavelanded_active_email'));
 
+  // Body Scroll Lock for High-End UX
   useEffect(() => {
     const shouldLock = isCartOpen || !!selectedCountry || showLoginModal || showAISupport || checkoutState !== 'idle';
     document.body.style.overflow = shouldLock ? 'hidden' : 'unset';
   }, [isCartOpen, selectedCountry, showLoginModal, showAISupport, checkoutState]);
 
+  // Persist cart
   useEffect(() => {
     localStorage.setItem('ihavelanded_cart', JSON.stringify(cartItems));
   }, [cartItems]);
@@ -65,50 +65,31 @@ const App: React.FC = () => {
   const handlePostPaymentSuccess = async (sessionId: string) => {
     setCheckoutState('esim_provisioning');
     try {
+      // High-end delay for cinematic effect
       await new Promise(resolve => setTimeout(resolve, 3000));
       const order = await ESimService.getOrderByStripeSession(sessionId);
-      
-      const finalizedOrder = {
-        ...order,
-        items: [...cartItems]
-      };
-
-      // 1. Persist order data
-      AuthService.saveOrderToLedger(finalizedOrder);
-      
-      // 2. Trigger secondary fulfillment (Recording transaction)
-      await GoogleSheetsService.recordSignup(finalizedOrder.email, 'CUSTOMER_PURCHASE', finalizedOrder);
-      
-      // 3. SECURE SESSION: Initialize user state immediately
-      const email = finalizedOrder.email.toLowerCase().trim();
-      setUserEmail(email);
-      localStorage.setItem('ihavelanded_active_email', email);
-
-      setCurrentOrder(finalizedOrder);
+      setCurrentOrder(order);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
     } catch (error) {
-      console.warn("API Node Delay:", error.message);
+      console.warn("API Provisioning Error (Expected if out of credit):", error);
+      
+      // If we are in production and the API failed, we still want to show the Success UI
+      // because the user HAS paid Stripe successfully.
       const fallbackOrder: Order = {
-        id: sessionId.substring(sessionId.length - 8).toUpperCase(),
-        email: pendingEmail || 'Scholar Session',
+        id: sessionId.substring(0, 12).toUpperCase(),
+        email: pendingEmail || 'Checking order...',
         items: [...cartItems],
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
-        currency: 'USD' as any,
+        currency: 'USD',
         status: 'completed',
-        activationCode: 'PROVISIONING_VIA_EMAIL'
+        qrCode: undefined, // UI shows "Provisioning" state when QR is missing
+        activationCode: 'PROVISIONING_DELAYED'
       };
       
-      AuthService.saveOrderToLedger(fallbackOrder);
-      
-      if (fallbackOrder.email && fallbackOrder.email.includes('@')) {
-        const email = fallbackOrder.email.toLowerCase().trim();
-        setUserEmail(email);
-        localStorage.setItem('ihavelanded_active_email', email);
-      }
-
       setCurrentOrder(fallbackOrder);
       setCartItems([]);
+      localStorage.removeItem('ihavelanded_cart');
     } finally {
       setCheckoutState('idle');
     }
@@ -122,25 +103,50 @@ const App: React.FC = () => {
         email: pendingEmail || 'scholar@university.edu',
         items: [...cartItems],
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
-        currency: 'USD' as any,
+        currency: 'USD',
         status: 'completed',
-        activationCode: 'PROVISIONED_VIA_EMAIL'
+        qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$SMDP.GSMA.COM$IHL-PROD-TOKEN',
+        activationCode: 'LPA:1$SMDP.GSMA.COM$IHL-PROD-TOKEN'
       };
-      AuthService.saveOrderToLedger(mockOrder);
-      const email = mockOrder.email.toLowerCase().trim();
-      setUserEmail(email);
-      localStorage.setItem('ihavelanded_active_email', email);
       setCurrentOrder(mockOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
       setCheckoutState('idle');
-    }, 2500);
+    }, 2800);
+  };
+
+  const handleSelectCountry = (country: Country) => setSelectedCountry(country);
+
+  const handleAddToCart = (plan: eSIMPlan) => {
+    if (selectedCountry) {
+      setCartItems(prev => [...prev, { plan, country: selectedCountry, quantity: 1 }]);
+      setSelectedCountry(null);
+      setIsCartOpen(true);
+    }
+  };
+
+  const handleCheckout = async (email: string) => {
+    setPendingEmail(email);
+    setIsCartOpen(false);
+
+    if (ENV.USE_MOCKS) {
+      setCheckoutState('local_payment');
+    } else {
+      setCheckoutState('preparing_stripe');
+      try {
+        await StripeService.redirectToCheckout(cartItems, email);
+      } catch (error: any) {
+        console.error('Checkout failed:', error);
+        setCheckoutState('idle');
+        setIsCartOpen(true);
+        alert(`Checkout Unsuccessful: ${error.message || 'Please check your connection.'}`);
+      }
+    }
   };
 
   const handleLoginSuccess = (email: string) => {
-    const normalized = email.toLowerCase().trim();
-    setUserEmail(normalized);
-    localStorage.setItem('ihavelanded_active_email', normalized);
+    setUserEmail(email);
+    localStorage.setItem('ihavelanded_active_email', email);
     setView('dashboard');
   };
 
@@ -151,15 +157,10 @@ const App: React.FC = () => {
   };
 
   const resetFlow = () => {
-    // Determine the next view based on authentication state
-    if (userEmail) {
-      setView('dashboard'); // Route directly to dashboard since session is active
-    } else {
-      setView('store');
-    }
     setCurrentOrder(null);
     setSelectedCountry(null);
     setPendingEmail('');
+    setView('store');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -190,8 +191,8 @@ const App: React.FC = () => {
           />
         ) : (
           <div className="animate-in fade-in duration-1000">
-            <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
-            <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
+            <Hero onSelectCountry={handleSelectCountry} />
+            <CountryGrid onSelectCountry={handleSelectCountry} />
             <HowItWorks />
             <Blog />
             <EnterToWin />
@@ -201,15 +202,12 @@ const App: React.FC = () => {
 
       <Footer />
 
+      {/* Overlays */}
       {selectedCountry && (
         <PlanModal
           country={selectedCountry}
           onClose={() => setSelectedCountry(null)}
-          onAddToCart={(plan) => {
-             setCartItems(prev => [...prev, { plan, country: selectedCountry, quantity: 1 }]);
-             setSelectedCountry(null);
-             setIsCartOpen(true);
-          }}
+          onAddToCart={handleAddToCart}
         />
       )}
 
@@ -218,16 +216,7 @@ const App: React.FC = () => {
         onClose={() => setIsCartOpen(false)}
         items={cartItems}
         onRemoveItem={(idx) => setCartItems(prev => prev.filter((_, i) => i !== idx))}
-        onCheckout={(email) => {
-          setPendingEmail(email);
-          setIsCartOpen(false);
-          if (ENV.USE_MOCKS) {
-            setCheckoutState('local_payment');
-          } else {
-            setCheckoutState('preparing_stripe');
-            StripeService.redirectToCheckout(cartItems, email).catch(() => setCheckoutState('idle'));
-          }
-        }}
+        onCheckout={handleCheckout}
       />
 
       {showLoginModal && (
@@ -256,22 +245,63 @@ const App: React.FC = () => {
         </svg>
       </button>
 
-      <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} userEmail={userEmail} />
+      <ScholarAI
+        isOpen={showAISupport}
+        onClose={() => setShowAISupport(false)}
+        userEmail={userEmail}
+      />
 
       {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
-        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700 text-center">
-           <div className="relative w-64 h-64 mb-16">
+        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-airalo/20 via-transparent to-transparent animate-pulse"></div>
+          </div>
+          
+          <div className="relative w-64 h-64 mb-16">
             <div className="absolute inset-0 border-[2px] border-white/5 rounded-full"></div>
-            <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin [animation-duration:1.2s]"></div>
+            <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin [animation-duration:1.5s]"></div>
+            <div className="absolute inset-4 border border-white/10 rounded-full animate-reverse-spin [animation-duration:3s]"></div>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-               <svg className="w-16 h-16 text-white mb-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo animate-pulse">Node Sync</span>
+               <svg className="w-16 h-16 text-white mb-3" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+               </svg>
+               <span className="text-[9px] font-black tracking-[0.4em] uppercase text-airalo animate-pulse">Secure Node</span>
             </div>
           </div>
-          <h2 className="text-4xl font-black uppercase tracking-tighter italic">Securing Your Provision</h2>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Connecting to Tier-1 Carrier Node...</p>
+
+          <div className="text-center space-y-6 max-w-xl">
+            <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter italic">
+              {checkoutState === 'preparing_stripe' ? 'Initializing Secure Vault' : 'Provisioning High-Speed Asset'}
+            </h2>
+            <div className="flex items-center justify-center gap-4 text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em]">
+               <span className="animate-bounce">●</span>
+               <span>{checkoutState === 'preparing_stripe' ? 'Encrypting Handshake' : 'Carrier Syncing In Progress'}</span>
+               <span className="animate-bounce [animation-delay:0.2s]">●</span>
+            </div>
+            <p className="text-slate-400 font-medium text-lg leading-relaxed px-6 opacity-70">
+              {checkoutState === 'preparing_stripe' ? 
+                'Connecting to the primary Stripe vault to authorize your connectivity profile.' : 
+                'Allocating your unique digital signature on the local carrier network. Almost ready.'}
+            </p>
+          </div>
+
+          <div className="mt-24 flex items-center gap-12 opacity-30 filter grayscale contrast-200">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" className="h-5" alt="Stripe" />
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/51/IBM_logo.svg" className="h-4" alt="IBM" />
+            <img src="https://upload.wikimedia.org/wikipedia/commons/3/39/Google_Cloud_Logo.svg" className="h-5" alt="GCP" />
+          </div>
         </div>
       )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes reverse-spin {
+          from { transform: rotate(360deg); }
+          to { transform: rotate(0deg); }
+        }
+        .animate-reverse-spin {
+          animation: reverse-spin linear infinite;
+        }
+      `}} />
     </div>
   );
 };
