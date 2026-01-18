@@ -25,14 +25,13 @@ export default async function handler(req, res) {
     const planConfig = CATALOG_MAP[priceId] || { locationCode: 'US', packageCode: 'PNNLXUOMD' };
     const customerEmail = session.customer_email.toLowerCase();
 
-    // If credentials are missing, we immediately move to manual fulfillment to save the UX
     if (!accessCode || !secretKey) {
-      console.warn('[INFRASTRUCTURE] Credentials missing. Moving to manual desk.');
+      console.warn('[INFRASTRUCTURE] Credentials missing. Routing to manual concierge.');
       return res.status(200).json({
         id: session.id,
         email: customerEmail,
         status: 'manual_fulfillment',
-        message: 'A bespoke specialist is manually securing your asset.'
+        message: 'Bespoke architectural verification required.'
       });
     }
 
@@ -41,14 +40,15 @@ export default async function handler(req, res) {
     const headers = { 'RT-AppKey': accessCode, 'RT-Timestamp': timestamp, 'RT-Sign': sign, 'Content-Type': 'application/json' };
 
     try {
-      // We use a tight 4s timeout to leave room for the rest of the Vercel execution
+      // Increased timeout to 8500ms. This allows most slow carrier handshakes to complete.
+      // We remain under the 10s Vercel limit.
       const buyResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
         locationCode: planConfig.locationCode,
         packageCode: planConfig.packageCode,
         quantity: 1,
         externalOrderNo: session.id,
         email: customerEmail 
-      }, { headers, timeout: 4500 });
+      }, { headers, timeout: 8500 });
       
       const buyData = buyResponse.data;
 
@@ -65,25 +65,24 @@ export default async function handler(req, res) {
           country: "USA & Canada"
         });
       } else {
-        // Log the specific error for the admin, but don't show the user "Error 800101"
-        console.error(`[CARRIER-REJECTION] Code: ${buyData.code}, Msg: ${buyData.message}`);
+        console.error(`[CARRIER-STATUS] Code: ${buyData.code}, Msg: ${buyData.message}`);
         return res.status(200).json({
           id: session.id,
           email: customerEmail,
           status: 'manual_fulfillment',
-          message: 'Security node requiring manual architectural validation.'
+          message: 'Carrier node routing requiring manual validation.'
         });
       }
     } catch (err) {
-      console.warn('[HANDSHAKE-TIMEOUT] Carrier node slow. Routing to manual desk.');
+      console.warn('[HANDSHAKE-TIMEOUT] API did not finish in 8.5s. Returning async-pending state.');
       return res.status(200).json({
         id: session.id,
         email: customerEmail,
         status: 'manual_fulfillment',
-        message: 'High-demand node detected. A dedicated specialist is securing your line.'
+        message: 'High-demand node detected. Establishing secure secondary link.'
       });
     }
   } catch (error) {
-    res.status(500).json({ error: 'Fatal Handshake Interruption', details: error.message });
+    res.status(500).json({ error: 'Global Handshake Interrupted', details: error.message });
   }
 }

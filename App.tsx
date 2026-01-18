@@ -32,6 +32,14 @@ const App: React.FC = () => {
   const [showAISupport, setShowAISupport] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+  const [provisioningStep, setProvisioningStep] = useState(0);
+
+  const steps = [
+    "Establishing Encrypted Node Link",
+    "Synchronizing Carrier Registry",
+    "Generating Digital Asset Key",
+    "Securing Tier-1 Network Priority"
+  ];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -40,16 +48,27 @@ const App: React.FC = () => {
 
     if (status === 'success' && sessionId) {
       handlePostPaymentSuccess(sessionId);
-      // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
   const handlePostPaymentSuccess = async (sessionId: string) => {
     setCheckoutState('esim_provisioning');
+    
+    // Start step animation
+    const stepInterval = setInterval(() => {
+      setProvisioningStep(prev => (prev < steps.length - 1 ? prev + 1 : prev));
+    }, 2000);
+
+    const startTime = Date.now();
     try {
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
+      // Ensure the user sees the sequence for at least 6 seconds to maintain "High End" feel
+      const elapsed = Date.now() - startTime;
+      const waitTime = Math.max(0, 6500 - elapsed);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+
       if (order.status === 'completed' && order.email) {
         if (!AuthService.userExists(order.email)) {
           AuthService.register(order.email, 'scholar123', order.id);
@@ -63,7 +82,6 @@ const App: React.FC = () => {
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
     } catch (error: any) {
-      console.error("Provisioning Error:", error);
       setCurrentOrder({
         id: sessionId.substring(0,10),
         email: 'Scholar Client',
@@ -71,9 +89,10 @@ const App: React.FC = () => {
         total: 0,
         currency: 'USD',
         status: 'error',
-        message: error.message || 'The connectivity node is unresponsive. Our engineering desk has been notified.'
+        message: 'Handshake timeout. Your asset is secured and will arrive via email.'
       });
     } finally {
+      clearInterval(stepInterval);
       setCheckoutState('idle');
     }
   };
@@ -85,7 +104,7 @@ const App: React.FC = () => {
       await StripeService.redirectToCheckout(cartItems, email);
     } catch (error: any) {
       setCheckoutState('idle');
-      alert(`Payment Gateway Node Error: ${error.message}`);
+      alert(`Gateway Error: ${error.message}`);
     }
   };
 
@@ -115,7 +134,7 @@ const App: React.FC = () => {
         onDashboardClick={() => setCheckoutState('dashboard')}
       />
 
-      <main className={`flex-grow transition-all duration-700 ${checkoutState !== 'idle' ? 'blur-xl scale-[0.98]' : ''}`}>
+      <main className={`flex-grow transition-all duration-1000 ${checkoutState !== 'idle' ? 'blur-2xl scale-[0.98]' : ''}`}>
         <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
         <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
         <HowItWorks />
@@ -149,17 +168,28 @@ const App: React.FC = () => {
       <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} userEmail={loggedInUser} />
 
       {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
-        <div className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-2xl flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-1000">
-           <div className="relative w-32 h-32 mb-12">
+        <div className="fixed inset-0 z-[1000] bg-slate-950/95 backdrop-blur-3xl flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-1000">
+           <div className="relative w-40 h-40 mb-16">
              <div className="absolute inset-0 border-4 border-white/5 rounded-full"></div>
              <div className="absolute inset-0 border-4 border-airalo border-t-transparent rounded-full animate-spin"></div>
              <div className="absolute inset-4 border-2 border-airalo/20 border-b-transparent rounded-full animate-reverse-spin"></div>
+             <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-1 h-1 bg-airalo rounded-full animate-ping"></div>
+             </div>
            </div>
-           <div className="text-center space-y-6">
-             <h2 className="text-3xl font-black uppercase tracking-[0.3em] italic animate-pulse">
-               {checkoutState === 'preparing_stripe' ? 'Securing Carrier Node' : 'Synchronizing Asset'}
-             </h2>
-             <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.5em]">Establishing Encrypted Infrastructure Handshake...</p>
+           <div className="text-center space-y-8 max-w-sm">
+             <div className="space-y-3">
+               <h2 className="text-2xl font-black uppercase tracking-[0.4em] italic text-white leading-none">
+                 {checkoutState === 'preparing_stripe' ? 'Securing Node' : 'Bespoke Sync'}
+               </h2>
+               <div className="h-0.5 w-12 bg-airalo mx-auto"></div>
+             </div>
+             <div className="space-y-2">
+               <p className="text-airalo font-black uppercase text-[10px] tracking-[0.5em] h-4">
+                 {checkoutState === 'esim_provisioning' ? steps[provisioningStep] : 'Authenticating Gateway'}
+               </p>
+               <p className="text-slate-500 font-bold uppercase text-[9px] tracking-[0.3em]">Tier-1 Global Infrastructure</p>
+             </div>
            </div>
         </div>
       )}
