@@ -50,8 +50,7 @@ const App: React.FC = () => {
     try {
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
-      // Automatic Account Sync
-      if (order.email) {
+      if (order.status === 'completed' && order.email) {
         if (!AuthService.userExists(order.email)) {
           AuthService.register(order.email, 'scholar123', order.id);
         } else {
@@ -63,17 +62,16 @@ const App: React.FC = () => {
       setCurrentOrder(order);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Provisioning Error:", error);
-      // Create a fallback error order state to show the error UI instead of just an alert
       setCurrentOrder({
         id: sessionId.substring(0,10),
-        email: 'Unknown',
+        email: 'Scholar Client',
         items: [],
         total: 0,
         currency: 'USD',
         status: 'error',
-        message: 'Handshake timeout. Please check your dashboard or email.'
+        message: error.message || 'The connectivity gateway timed out. Please contact support@ihavelanded.com'
       });
     } finally {
       setCheckoutState('idle');

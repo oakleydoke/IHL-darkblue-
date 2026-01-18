@@ -14,7 +14,12 @@ export interface ESimUsage {
 export class ESimService extends ApiService {
   static async getOrderByStripeSession(sessionId: string): Promise<Order> {
     const response = await fetch(`${ENV.API_BASE_URL}/orders/verify-session?sessionId=${sessionId}`);
-    if (!response.ok) throw new Error('Provisioning check failed');
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.details || errorData.error || 'Provisioning handshake timeout');
+    }
+    
     return await response.json();
   }
 
@@ -29,7 +34,6 @@ export class ESimService extends ApiService {
   }
 
   static async getUserESims(orderIds: string[]): Promise<any[]> {
-    // In a full build, this queries your DB. For now, we return based on locally tracked orders
     return orderIds.map(id => ({
       iccid: '8986...',
       country: 'Global',
