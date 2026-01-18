@@ -11,18 +11,14 @@ import PlanModal from './components/PlanModal';
 import Cart from './components/Cart';
 import OrderConfirmation from './components/OrderConfirmation';
 import Footer from './components/Footer';
-import UserDashboard from './components/UserDashboard';
-import LoginModal from './components/LoginModal';
 import ScholarAI from './components/ScholarAI';
 import StripePaymentSheet from './components/StripePaymentSheet';
 import { ESimService } from './services/eSimService';
 import { StripeService } from './services/stripeService';
-import { AuthService } from './services/authService';
 import { GoogleSheetsService } from './services/googleSheetsService';
 import { ENV } from './config';
 
 type CheckoutState = 'idle' | 'preparing_stripe' | 'local_payment' | 'esim_provisioning';
-type ViewState = 'store' | 'dashboard';
 
 const App: React.FC = () => {
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
@@ -33,16 +29,13 @@ const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('idle');
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAISupport, setShowAISupport] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
-  const [view, setView] = useState<ViewState>('store');
-  const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('ihavelanded_active_email'));
 
   useEffect(() => {
-    const shouldLock = isCartOpen || !!selectedCountry || showLoginModal || showAISupport || checkoutState !== 'idle';
+    const shouldLock = isCartOpen || !!selectedCountry || showAISupport || checkoutState !== 'idle';
     document.body.style.overflow = shouldLock ? 'hidden' : 'unset';
-  }, [isCartOpen, selectedCountry, showLoginModal, showAISupport, checkoutState]);
+  }, [isCartOpen, selectedCountry, showAISupport, checkoutState]);
 
   useEffect(() => {
     localStorage.setItem('ihavelanded_cart', JSON.stringify(cartItems));
@@ -65,6 +58,7 @@ const App: React.FC = () => {
   const handlePostPaymentSuccess = async (sessionId: string) => {
     setCheckoutState('esim_provisioning');
     try {
+      // Small architectural delay for sync visual
       await new Promise(resolve => setTimeout(resolve, 3000));
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
@@ -73,17 +67,9 @@ const App: React.FC = () => {
         items: [...cartItems]
       };
 
-      // 1. Persist order data
-      AuthService.saveOrderToLedger(finalizedOrder);
-      
-      // 2. Trigger secondary fulfillment (Recording transaction)
+      // Record transaction to global ledger
       await GoogleSheetsService.recordSignup(finalizedOrder.email, 'CUSTOMER_PURCHASE', finalizedOrder);
       
-      // 3. SECURE SESSION: Initialize user state immediately
-      const email = finalizedOrder.email.toLowerCase().trim();
-      setUserEmail(email);
-      localStorage.setItem('ihavelanded_active_email', email);
-
       setCurrentOrder(finalizedOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
@@ -96,17 +82,9 @@ const App: React.FC = () => {
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
         currency: 'USD' as any,
         status: 'completed',
-        activationCode: 'PROVISIONING_VIA_EMAIL'
+        activationCode: 'PROVISIONING_PENDING'
       };
       
-      AuthService.saveOrderToLedger(fallbackOrder);
-      
-      if (fallbackOrder.email && fallbackOrder.email.includes('@')) {
-        const email = fallbackOrder.email.toLowerCase().trim();
-        setUserEmail(email);
-        localStorage.setItem('ihavelanded_active_email', email);
-      }
-
       setCurrentOrder(fallbackOrder);
       setCartItems([]);
     } finally {
@@ -124,12 +102,8 @@ const App: React.FC = () => {
         total: cartItems.reduce((s, i) => s + i.plan.price, 0),
         currency: 'USD' as any,
         status: 'completed',
-        activationCode: 'PROVISIONED_VIA_EMAIL'
+        activationCode: 'LPA:1$SM-DP.GSMA.COM$MOCK-ACTIVATION-CODE'
       };
-      AuthService.saveOrderToLedger(mockOrder);
-      const email = mockOrder.email.toLowerCase().trim();
-      setUserEmail(email);
-      localStorage.setItem('ihavelanded_active_email', email);
       setCurrentOrder(mockOrder);
       setCartItems([]);
       localStorage.removeItem('ihavelanded_cart');
@@ -137,26 +111,7 @@ const App: React.FC = () => {
     }, 2500);
   };
 
-  const handleLoginSuccess = (email: string) => {
-    const normalized = email.toLowerCase().trim();
-    setUserEmail(normalized);
-    localStorage.setItem('ihavelanded_active_email', normalized);
-    setView('dashboard');
-  };
-
-  const handleLogout = () => {
-    setUserEmail(null);
-    localStorage.removeItem('ihavelanded_active_email');
-    setView('store');
-  };
-
   const resetFlow = () => {
-    // Determine the next view based on authentication state
-    if (userEmail) {
-      setView('dashboard'); // Route directly to dashboard since session is active
-    } else {
-      setView('store');
-    }
     setCurrentOrder(null);
     setSelectedCountry(null);
     setPendingEmail('');
@@ -175,28 +130,17 @@ const App: React.FC = () => {
       <Header
         cartCount={cartItems.length}
         onCartClick={() => { setIsCartOpen(true); setShowAISupport(false); }}
-        onHomeClick={() => setView('store')}
-        isLoggedIn={!!userEmail}
-        onLogin={() => setShowLoginModal(true)}
-        onDashboardClick={() => setView('dashboard')}
+        onHomeClick={() => resetFlow()}
       />
 
       <main className={`flex-grow transition-all duration-700 ${checkoutState !== 'idle' ? 'blur-md scale-[0.98]' : 'blur-0 scale-100'}`}>
-        {view === 'dashboard' && userEmail ? (
-          <UserDashboard
-            email={userEmail}
-            onLogout={handleLogout}
-            onClose={() => setView('store')}
-          />
-        ) : (
-          <div className="animate-in fade-in duration-1000">
-            <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
-            <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
-            <HowItWorks />
-            <Blog />
-            <EnterToWin />
-          </div>
-        )}
+        <div className="animate-in fade-in duration-1000">
+          <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
+          <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
+          <HowItWorks />
+          <Blog />
+          <EnterToWin />
+        </div>
       </main>
 
       <Footer />
@@ -230,13 +174,6 @@ const App: React.FC = () => {
         }}
       />
 
-      {showLoginModal && (
-        <LoginModal
-          onClose={() => setShowLoginModal(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      )}
-
       {checkoutState === 'local_payment' && (
         <StripePaymentSheet 
           amount={subtotal - discount}
@@ -256,10 +193,10 @@ const App: React.FC = () => {
         </svg>
       </button>
 
-      <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} userEmail={userEmail} />
+      <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} />
 
       {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
-        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700 text-center">
+        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700 text-center text-slate-100">
            <div className="relative w-64 h-64 mb-16">
             <div className="absolute inset-0 border-[2px] border-white/5 rounded-full"></div>
             <div className="absolute inset-0 border-[2px] border-airalo border-t-transparent rounded-full animate-spin [animation-duration:1.2s]"></div>

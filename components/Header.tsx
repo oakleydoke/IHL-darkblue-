@@ -5,18 +5,12 @@ interface HeaderProps {
   cartCount: number;
   onCartClick: () => void;
   onHomeClick: () => void;
-  isLoggedIn: boolean;
-  onLogin: () => void;
-  onDashboardClick: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
   cartCount, 
   onCartClick, 
-  onHomeClick, 
-  isLoggedIn, 
-  onLogin, 
-  onDashboardClick 
+  onHomeClick
 }) => {
   const scrollTo = (id: string) => {
     onHomeClick(); // Ensure we are on the home view
@@ -89,24 +83,12 @@ const Header: React.FC<HeaderProps> = ({
             )}
           </button>
           
-          {isLoggedIn ? (
-            <button 
-              onClick={onDashboardClick}
-              className="flex items-center gap-3 bg-slate-800 border border-white/10 px-5 py-2.5 rounded-full hover:bg-slate-700 transition-all group"
-            >
-              <div className="w-6 h-6 bg-airalo rounded-full flex items-center justify-center text-[10px] font-black text-white">
-                {isLoggedIn ? 'JD' : '..'}
-              </div>
-              <span className="text-[10px] font-black text-white uppercase tracking-widest hidden md:block">Manage eSIMs</span>
-            </button>
-          ) : (
-            <button 
-              onClick={onLogin}
-              className="bg-white text-slate-900 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 hover:text-white border border-slate-200 transition-all transform active:scale-95 shadow-sm"
-            >
-              Log in
-            </button>
-          )}
+          <button 
+            onClick={() => scrollTo('destinations')}
+            className="bg-white text-slate-900 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-airalo hover:text-white border border-slate-200 transition-all transform active:scale-95 shadow-sm"
+          >
+            Get Connected
+          </button>
         </div>
       </div>
     </header>
