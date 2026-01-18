@@ -209,7 +209,7 @@ const OrderConfirmation: React.FC<OrderConfirmationProps> = ({ order: initialOrd
               {!shouldPoll && !isError && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-700">
                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed px-2">
-                     Installation: Open <span className="text-slate-900">Settings</span> > <span className="text-slate-900">Cellular</span> > <span className="text-slate-900">Add eSIM</span>. Scan the digital asset above while connected to Wi-Fi.
+                     Installation: Open <span className="text-slate-900">Settings</span> &gt; <span className="text-slate-900">Cellular</span> &gt; <span className="text-slate-900">Add eSIM</span>. Scan the digital asset above while connected to Wi-Fi.
                    </p>
                    <button className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-airalo transition-all">Download PDF Credentials</button>
                 </div>
