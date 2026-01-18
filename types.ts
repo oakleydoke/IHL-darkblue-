@@ -9,7 +9,7 @@ export interface eSIMPlan {
   price: number; 
   currency: string;
   coverage: string;
-  stripePriceId: string; // REQUIRED FOR PRODUCTION
+  stripePriceId: string;
 }
 
 export interface Country {
@@ -33,7 +33,10 @@ export interface Order {
   items: CartItem[];
   total: number;
   currency: CurrencyCode;
-  status: 'pending' | 'completed';
+  status: 'pending' | 'completed' | 'error';
   qrCode?: string;
   activationCode?: string;
+  iccid?: string;
+  orderNo?: string;
+  message?: string;
 }

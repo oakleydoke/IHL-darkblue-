@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const [showAISupport, setShowAISupport] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
-  const [pendingEmail, setPendingEmail] = useState('');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -41,6 +40,7 @@ const App: React.FC = () => {
 
     if (status === 'success' && sessionId) {
       handlePostPaymentSuccess(sessionId);
+      // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -50,7 +50,7 @@ const App: React.FC = () => {
     try {
       const order = await ESimService.getOrderByStripeSession(sessionId);
       
-      // Automatic Account Creation/Update
+      // Automatic Account Sync
       if (order.email) {
         if (!AuthService.userExists(order.email)) {
           AuthService.register(order.email, 'scholar123', order.id);
@@ -65,21 +65,29 @@ const App: React.FC = () => {
       localStorage.removeItem('ihavelanded_cart');
     } catch (error) {
       console.error("Provisioning Error:", error);
-      alert("Order processed but fulfillment is delayed. Please check your email or contact support.");
+      // Create a fallback error order state to show the error UI instead of just an alert
+      setCurrentOrder({
+        id: sessionId.substring(0,10),
+        email: 'Unknown',
+        items: [],
+        total: 0,
+        currency: 'USD',
+        status: 'error',
+        message: 'Handshake timeout. Please check your dashboard or email.'
+      });
     } finally {
       setCheckoutState('idle');
     }
   };
 
   const handleCheckout = async (email: string) => {
-    setPendingEmail(email);
     setIsCartOpen(false);
     setCheckoutState('preparing_stripe');
     try {
       await StripeService.redirectToCheckout(cartItems, email);
     } catch (error: any) {
       setCheckoutState('idle');
-      alert(`Payment Error: ${error.message}`);
+      alert(`Stripe Gateway Error: ${error.message}`);
     }
   };
 
@@ -145,8 +153,10 @@ const App: React.FC = () => {
       {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
         <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700">
            <div className="w-24 h-24 border-4 border-airalo border-t-transparent rounded-full animate-spin mb-8"></div>
-           <h2 className="text-2xl font-black uppercase tracking-widest italic">Syncing with Carrier</h2>
-           <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Authorized Secure Node Handshake...</p>
+           <h2 className="text-2xl font-black uppercase tracking-widest italic text-center px-10">
+             {checkoutState === 'preparing_stripe' ? 'Securing Gateway' : 'Synchronizing Carrier Node'}
+           </h2>
+           <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Authorized Secure Handshake...</p>
         </div>
       )}
 
