@@ -36,30 +36,29 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
     setIsTyping(true);
 
     try {
-      if (!ENV.GEMINI_API_KEY) {
-        throw new Error("API Key missing");
-      }
+      if (!ENV.GEMINI_API_KEY) throw new Error("API Key missing");
       const ai = new GoogleGenAI({ apiKey: ENV.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview', // Upgraded to Pro for technical troubleshooting
         contents: [{ role: 'user', parts: [{ text: userMessage }] }],
         config: {
+          thinkingConfig: { thinkingBudget: 2000 }, // Enable reasoning for API debugging
           systemInstruction: `
-            You are "Scholar AI", the dedicated concierge for "I Have Landed", an elite eSIM service for international students.
-            Identity: High-end, architectural, minimalist. 
-            Tone: Professional, helpful, and concise. 
-            Knowledge: We provide 5G data eSIMs in 12 global hubs (Verizon, Vodafone, Orange networks).
-            Constraint: Max 2 sentences. Use sophisticated language.
-            Context: User is ${userEmail ? `authenticated as ${userEmail}` : 'a prospective scholar'}.
+            You are "Scholar AI", the technical concierge for "I Have Landed".
+            Identity: High-end, sophisticated, and deeply technical.
+            Goal: Help the admin (user) troubleshoot eSIMAccess API issues, carrier provisioning errors, and student inquiries.
+            Knowledge: We use eSIMAccess V1 API (/order/v1/buy). 
+            If the user asks about "package code no longer exists", explain that they must "Favorite" (Heart) the package in the portal to subscribe it to their catalog.
+            Tone: Professional and architectural.
           `
         }
       });
 
-      const text = response.text || "I apologize, my connection to the global node is temporarily unstable. Please reach our support desk.";
+      const text = response.text || "Connection link restricted. Please retry.";
       setMessages(prev => [...prev, { role: 'assistant', text }]);
     } catch (error) {
       console.error("Scholar AI Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', text: "Service link interrupted. Our technical concierge team has been notified." }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: "Service link interrupted." }]);
     } finally {
       setIsTyping(false);
     }
@@ -79,7 +78,7 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
           </div>
           <div>
             <h3 className="font-black text-sm uppercase tracking-[0.25em] leading-none">Scholar AI</h3>
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-3">Elite Concierge</p>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-3">Elite Tech Concierge</p>
           </div>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white relative z-10">

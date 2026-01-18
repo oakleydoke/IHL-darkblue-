@@ -4,19 +4,14 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 /**
- * PRODUCTION MAPPING TABLE
- * Map your Stripe Price IDs to your SUBSCRIBED eSIMAccess Package Codes.
+ * MAPPING TABLE
+ * Use the value found in the "Package Code", "Slug", or "Offer ID" column 
+ * of your eSIMAccess / SimHub portal.
  */
 const PACKAGE_MAP = {
-  // Sandbox / Testing
-  'price_sandbox_test': { locationCode: 'US', packageCode: 'US_1GB_7D' },
-
-  // USA - Ensure these are "Subscribed" in your portal
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'US_5GB_30D' },
   'price_us_10gb_prod': { locationCode: 'US', packageCode: 'US_10GB_30D' },
   'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'USCA-2_1_Daily' },
-  
-  // UK
   'price_uk_3gb_prod': { locationCode: 'GB', packageCode: 'GB_3GB_30D' },
   'price_uk_10gb_prod': { locationCode: 'GB', packageCode: 'GB_10GB_30D' },
   'price_uk_unlimited_prod': { locationCode: 'GB', packageCode: 'GB_UL_30D' },
@@ -25,9 +20,7 @@ const PACKAGE_MAP = {
 export default async function handler(req, res) {
   const { sessionId } = req.query;
 
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Session ID required' });
-  }
+  if (!sessionId) return res.status(400).json({ error: 'Session ID required' });
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -39,20 +32,24 @@ export default async function handler(req, res) {
     const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_5GB_30D' };
     const customerEmail = session.customer_email.toLowerCase();
 
-    // Security Headers
+    // eSIMAccess V1/V2 Auth Protocol
     const appKey = process.env.ESIM_ACCESS_APP_KEY;
     const appSecret = process.env.ESIM_ACCESS_APP_SECRET;
     const timestamp = Date.now().toString();
+    
+    // RT-Sign = SHA256(Key + Secret + Timestamp)
     const sign = crypto.createHash('sha256').update(appKey + appSecret + timestamp).digest('hex');
 
+    const requestBody = {
+      locationCode: planConfig.locationCode,
+      packageCode: planConfig.packageCode, // Note: Try changing this key to 'slug' if packageCode is failing
+      quantity: 1,
+      externalOrderNo: session.id,
+      email: customerEmail 
+    };
+
     try {
-      const esimResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
-        locationCode: planConfig.locationCode,
-        packageCode: planConfig.packageCode,
-        quantity: 1,
-        externalOrderNo: session.id,
-        email: customerEmail 
-      }, {
+      const esimResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', requestBody, {
         headers: {
           'RT-AppKey': appKey,
           'RT-Timestamp': timestamp,
@@ -63,7 +60,7 @@ export default async function handler(req, res) {
       });
 
       const esimData = esimResponse.data;
-      console.log(`eSIMAccess Result [${session.id}]:`, JSON.stringify(esimData));
+      console.log(`[PROVISIONER] Success response for ${session.id}:`, JSON.stringify(esimData));
 
       const isSuccess = esimData.code === '000000' || esimData.code === 0 || esimData.code === "0";
 
@@ -73,13 +70,16 @@ export default async function handler(req, res) {
         status: 'completed',
         total: session.amount_total / 100,
         currency: 'USD',
-        // If it failed, we return the error message so you can see it in the UI
-        activationCode: isSuccess ? (esimData.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : `ERROR: ${esimData.message || 'Unknown Provider Error'}`
+        activationCode: isSuccess ? (esimData.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : `ERROR: ${esimData.message || 'Unknown Provider Error'} (Code: ${esimData.code})`,
+        debug: {
+            sentPackage: planConfig.packageCode,
+            providerCode: esimData.code
+        }
       });
 
     } catch (esimError) {
-      const errorDetail = esimError.response?.data || { message: esimError.message };
-      console.error('eSIMAccess API Fatal:', JSON.stringify(errorDetail));
+      const errorData = esimError.response?.data || { message: esimError.message };
+      console.error('[PROVISIONER] API Rejected Request:', JSON.stringify(errorData));
       
       return res.status(200).json({
         id: session.id,
@@ -87,12 +87,12 @@ export default async function handler(req, res) {
         status: 'completed', 
         total: session.amount_total / 100,
         currency: 'USD',
-        activationCode: `CONNECTION_ERROR: ${errorDetail.message || 'Check Server Logs'}`
+        activationCode: `CONNECTION_ERROR: ${errorData.message || 'Check Server Logs'} (Payload: ${planConfig.packageCode})`
       });
     }
 
   } catch (error) {
-    console.error('Verification System Error:', error.message);
-    res.status(500).json({ error: 'Payment verified, but provisioning system is offline.' });
+    console.error('[SERVER] Fatal Auth Error:', error.message);
+    res.status(500).json({ error: 'System handshake failed.' });
   }
 }
