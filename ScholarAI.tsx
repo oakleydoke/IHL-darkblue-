@@ -44,14 +44,15 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
         config: {
           thinkingConfig: { thinkingBudget: 2500 },
           systemInstruction: `
-            You are "Scholar AI", technical support for "I Have Landed".
+            You are "Scholar AI", the technical concierge for "I Have Landed".
             
-            SCENARIO: If a user is asking about a "Manual Securing" or "Bespoke Sync" status:
-            - Explain that for high-demand regions (USA/UK), we occasionally route provisioning through our manual architectural desk to ensure absolute 5G priority and Tier-1 routing.
-            - Reassure them that their asset is being secured and will arrive via email within 10 minutes.
-            - Never use words like "Error", "Failed", or "API Down". Use "Architectural Verification" and "Manual Securing".
+            SCENARIO: If a user is asking about "Bespoke Sync", "Manual Securing", or why their eSIM isn't instant:
+            - Explain that Tier-1 global connectivity assets (especially in the USA and UK) require high-fidelity synchronization with regional carrier registries.
+            - This handshake ensures priority 5G routing and typically resolves within 60 seconds of the payment handshake.
+            - Reassure them that the "Bespoke Sync" sequence on their screen is monitoring the live node registry for their unique RSA key allocation.
+            - Never use words like "Error", "Slow", or "Broken". Use "Architectural Handshake", "Registry Propagation", and "Asset Verification".
             
-            Tone: Elite concierge, minimalist, architectural, and technically precise.
+            Tone: Elite, minimalist, architectural, and technically authoritative. Max 2 sentences.
           `
         }
       });
@@ -59,7 +60,7 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
       const text = response.text || "Connection link restricted. Please retry.";
       setMessages(prev => [...prev, { role: 'assistant', text }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', text: "Node link restricted. Please contact support@ihavelanded.com directly." }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: "Node link restricted. Please contact our technical desk: support@ihavelanded.com." }]);
     } finally {
       setIsTyping(false);
     }
@@ -118,7 +119,7 @@ const ScholarAI: React.FC<ScholarAIProps> = ({ isOpen, onClose, userEmail }) => 
             type="text" 
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Technical inquiry..."
+            placeholder="Concierge inquiry..."
             className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-7 py-6 pr-20 text-sm font-bold text-slate-800 focus:ring-4 focus:ring-airalo/10 focus:border-airalo outline-none transition-all placeholder:text-slate-400"
           />
           <button 

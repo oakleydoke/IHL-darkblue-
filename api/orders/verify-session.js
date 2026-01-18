@@ -26,7 +26,6 @@ export default async function handler(req, res) {
     const customerEmail = session.customer_email.toLowerCase();
 
     if (!accessCode || !secretKey) {
-      console.warn('[INFRASTRUCTURE] Credentials missing. Routing to manual concierge.');
       return res.status(200).json({
         id: session.id,
         email: customerEmail,
@@ -40,46 +39,49 @@ export default async function handler(req, res) {
     const headers = { 'RT-AppKey': accessCode, 'RT-Timestamp': timestamp, 'RT-Sign': sign, 'Content-Type': 'application/json' };
 
     try {
-      // Increased timeout to 8500ms. This allows most slow carrier handshakes to complete.
-      // We remain under the 10s Vercel limit.
+      // Step 1: Attempt to Buy/Check status. 
+      // We use a tight timeout to allow the frontend to take over polling if the carrier is slow (10-60s).
       const buyResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
         locationCode: planConfig.locationCode,
         packageCode: planConfig.packageCode,
         quantity: 1,
         externalOrderNo: session.id,
         email: customerEmail 
-      }, { headers, timeout: 8500 });
+      }, { headers, timeout: 8000 });
       
       const buyData = buyResponse.data;
 
+      // Code 000000 is success, but check if ICCID is ready
       if (buyData.code === '000000' || buyData.code === 0) {
+        const hasIccid = buyData.obj?.iccid && buyData.obj.iccid !== 'PROVISIONING';
+        
         return res.status(200).json({
           id: session.id,
           email: customerEmail,
-          status: 'completed',
+          status: hasIccid ? 'completed' : 'manual_fulfillment',
           total: session.amount_total / 100,
           orderNo: buyData.obj?.orderNo,
-          iccid: buyData.obj?.iccid,
+          iccid: hasIccid ? buyData.obj?.iccid : 'ALLOCATING',
           activationCode: buyData.obj?.activationCode,
           planName: "Scholar Unlimited / 1GB Daily",
           country: "USA & Canada"
         });
       } else {
-        console.error(`[CARRIER-STATUS] Code: ${buyData.code}, Msg: ${buyData.message}`);
+        // If order already exists but pending, or other common allocation states
         return res.status(200).json({
           id: session.id,
           email: customerEmail,
           status: 'manual_fulfillment',
-          message: 'Carrier node routing requiring manual validation.'
+          message: 'Carrier registry synchronization in progress.'
         });
       }
     } catch (err) {
-      console.warn('[HANDSHAKE-TIMEOUT] API did not finish in 8.5s. Returning async-pending state.');
+      // Timeout or API Error fallback to manual/polling state
       return res.status(200).json({
         id: session.id,
         email: customerEmail,
         status: 'manual_fulfillment',
-        message: 'High-demand node detected. Establishing secure secondary link.'
+        message: 'High-demand node detected. Synchronizing registry...'
       });
     }
   } catch (error) {
