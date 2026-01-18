@@ -5,16 +5,16 @@ const crypto = require('crypto');
 
 /**
  * PRODUCTION MAPPING TABLE
- * Maps Stripe Price IDs to eSIMAccess Catalog Codes.
+ * Map your Stripe Price IDs to your SUBSCRIBED eSIMAccess Package Codes.
  */
 const PACKAGE_MAP = {
-  // Test/Sandbox Code
+  // Sandbox / Testing
   'price_sandbox_test': { locationCode: 'US', packageCode: 'US_1GB_7D' },
 
-  // USA
+  // USA - Ensure these are "Subscribed" in your portal
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'US_5GB_30D' },
   'price_us_10gb_prod': { locationCode: 'US', packageCode: 'US_10GB_30D' },
-  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'US_3_Daily' },
+  'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'USCA-2_1_Daily' },
   
   // UK
   'price_uk_3gb_prod': { locationCode: 'GB', packageCode: 'GB_3GB_30D' },
@@ -30,38 +30,27 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Verify payment with Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
     if (session.payment_status !== 'paid') {
       return res.status(400).json({ error: 'Payment not completed' });
     }
 
-    // 2. Identify what was purchased
     const priceId = session.metadata?.plan_ids?.split(',')[0];
     const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_5GB_30D' };
     const customerEmail = session.customer_email.toLowerCase();
 
-    // 3. Prepare eSIMAccess Security Headers
+    // Security Headers
     const appKey = process.env.ESIM_ACCESS_APP_KEY;
-    const appSecret = process.env.ESIM_ACCESS_APP_SECRET; // REQUIRED: Found in portal settings
+    const appSecret = process.env.ESIM_ACCESS_APP_SECRET;
     const timestamp = Date.now().toString();
-    
-    // RT-Sign = SHA256(AppKey + AppSecret + Timestamp)
-    const sign = crypto
-      .createHash('sha256')
-      .update(appKey + appSecret + timestamp)
-      .digest('hex');
+    const sign = crypto.createHash('sha256').update(appKey + appSecret + timestamp).digest('hex');
 
-    // 4. Provision with eSIMAccess API
-    const ESIM_API_URL = 'https://api.esimaccess.com/order/v1/buy';
-    
     try {
-      const esimResponse = await axios.post(ESIM_API_URL, {
+      const esimResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
         locationCode: planConfig.locationCode,
         packageCode: planConfig.packageCode,
         quantity: 1,
-        externalOrderNo: session.id, // Must be unique
+        externalOrderNo: session.id,
         email: customerEmail 
       }, {
         headers: {
@@ -74,11 +63,8 @@ export default async function handler(req, res) {
       });
 
       const esimData = esimResponse.data;
-      
-      // LOGS: Essential for debugging in production logs
-      console.log(`eSIMAccess Response for Order ${session.id}:`, JSON.stringify(esimData));
+      console.log(`eSIMAccess Result [${session.id}]:`, JSON.stringify(esimData));
 
-      // Code "000000" or 0 is Success
       const isSuccess = esimData.code === '000000' || esimData.code === 0 || esimData.code === "0";
 
       return res.status(200).json({
@@ -87,14 +73,13 @@ export default async function handler(req, res) {
         status: 'completed',
         total: session.amount_total / 100,
         currency: 'USD',
-        // Activation code typically looks like: LPA:1$SM-DP.GSMA.COM$XXXXX
-        activationCode: isSuccess ? (esimData.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : 'PROVISIONING_PENDING'
+        // If it failed, we return the error message so you can see it in the UI
+        activationCode: isSuccess ? (esimData.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : `ERROR: ${esimData.message || 'Unknown Provider Error'}`
       });
 
     } catch (esimError) {
-      // Capture the exact rejection reason (e.g., "Invalid Signature", "No Balance", "Package Not Found")
-      const errorDetail = esimError.response?.data || esimError.message;
-      console.error('CRITICAL: eSIMAccess API Rejection:', JSON.stringify(errorDetail));
+      const errorDetail = esimError.response?.data || { message: esimError.message };
+      console.error('eSIMAccess API Fatal:', JSON.stringify(errorDetail));
       
       return res.status(200).json({
         id: session.id,
@@ -102,12 +87,12 @@ export default async function handler(req, res) {
         status: 'completed', 
         total: session.amount_total / 100,
         currency: 'USD',
-        activationCode: 'PROVISIONING_PENDING'
+        activationCode: `CONNECTION_ERROR: ${errorDetail.message || 'Check Server Logs'}`
       });
     }
 
   } catch (error) {
-    console.error('Verify Session Logic Error:', error.message);
-    res.status(500).json({ error: 'Server node error during verification.' });
+    console.error('Verification System Error:', error.message);
+    res.status(500).json({ error: 'Payment verified, but provisioning system is offline.' });
   }
 }
