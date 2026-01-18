@@ -71,7 +71,7 @@ const App: React.FC = () => {
         total: 0,
         currency: 'USD',
         status: 'error',
-        message: error.message || 'The connectivity gateway timed out. Please contact support@ihavelanded.com'
+        message: error.message || 'The connectivity node is unresponsive. Our engineering desk has been notified.'
       });
     } finally {
       setCheckoutState('idle');
@@ -85,7 +85,7 @@ const App: React.FC = () => {
       await StripeService.redirectToCheckout(cartItems, email);
     } catch (error: any) {
       setCheckoutState('idle');
-      alert(`Stripe Gateway Error: ${error.message}`);
+      alert(`Payment Gateway Node Error: ${error.message}`);
     }
   };
 
@@ -115,7 +115,7 @@ const App: React.FC = () => {
         onDashboardClick={() => setCheckoutState('dashboard')}
       />
 
-      <main className={`flex-grow transition-all duration-700 ${checkoutState !== 'idle' ? 'blur-md' : ''}`}>
+      <main className={`flex-grow transition-all duration-700 ${checkoutState !== 'idle' ? 'blur-xl scale-[0.98]' : ''}`}>
         <Hero onSelectCountry={(c) => setSelectedCountry(c)} />
         <CountryGrid onSelectCountry={(c) => setSelectedCountry(c)} />
         <HowItWorks />
@@ -149,18 +149,24 @@ const App: React.FC = () => {
       <ScholarAI isOpen={showAISupport} onClose={() => setShowAISupport(false)} userEmail={loggedInUser} />
 
       {(checkoutState === 'preparing_stripe' || checkoutState === 'esim_provisioning') && (
-        <div className="fixed inset-0 z-[1000] bg-slate-900 flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-700">
-           <div className="w-24 h-24 border-4 border-airalo border-t-transparent rounded-full animate-spin mb-8"></div>
-           <h2 className="text-2xl font-black uppercase tracking-widest italic text-center px-10">
-             {checkoutState === 'preparing_stripe' ? 'Securing Gateway' : 'Synchronizing Carrier Node'}
-           </h2>
-           <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-4">Authorized Secure Handshake...</p>
+        <div className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-2xl flex flex-col items-center justify-center text-white p-8 animate-in fade-in duration-1000">
+           <div className="relative w-32 h-32 mb-12">
+             <div className="absolute inset-0 border-4 border-white/5 rounded-full"></div>
+             <div className="absolute inset-0 border-4 border-airalo border-t-transparent rounded-full animate-spin"></div>
+             <div className="absolute inset-4 border-2 border-airalo/20 border-b-transparent rounded-full animate-reverse-spin"></div>
+           </div>
+           <div className="text-center space-y-6">
+             <h2 className="text-3xl font-black uppercase tracking-[0.3em] italic animate-pulse">
+               {checkoutState === 'preparing_stripe' ? 'Securing Carrier Node' : 'Synchronizing Asset'}
+             </h2>
+             <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.5em]">Establishing Encrypted Infrastructure Handshake...</p>
+           </div>
         </div>
       )}
 
       <button
         onClick={() => setShowAISupport(true)}
-        className="fixed bottom-8 left-8 w-16 h-16 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-airalo transition-all z-[180]"
+        className="fixed bottom-8 left-8 w-16 h-16 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-airalo transition-all z-[180] hover:scale-110 active:scale-90"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
           <path d="M12 2C6.477 2 2 6.477 2 12c0 1.891.527 3.653 1.438 5.155l-1.353 4.057a1 1 0 001.265 1.265l4.057-1.353A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" />
