@@ -5,16 +5,9 @@ const axios = require('axios');
 /**
  * eSIMAccess Mapping
  * locationCode: ISO alpha-2 country code (e.g., 'US', 'GB')
- * packageCode: Unique identifier from the eSIMAccess catalog.
- * 
- * NOTE: If your codes differ, find them in your eSIMAccess portal under 
- * "Package" -> "Package List".
+ * packageCode: Unique identifier from the eSIMAccess catalog (e.g., 'US_5GB_30D')
  */
 const PACKAGE_MAP = {
-  // Developer Testing
-  'price_sandbox_test': { locationCode: 'US', packageCode: 'US_1GB_7D' },
-  
-  // Production Mapping
   'price_us_5gb_prod': { locationCode: 'US', packageCode: 'US_5GB_30D' },
   'price_us_10gb_prod': { locationCode: 'US', packageCode: 'US_10GB_30D' },
   'price_1SqhSYCPrRzENMHl0tebNgtr': { locationCode: 'US', packageCode: 'PKY3WHPRZ' },
@@ -67,10 +60,14 @@ export default async function handler(req, res) {
     }
 
     const priceId = session.metadata?.plan_ids?.split(',')[0];
-    const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_1GB_7D' };
+    const planConfig = PACKAGE_MAP[priceId] || { locationCode: 'US', packageCode: 'US_5GB_30D' };
     const customerEmail = session.customer_email.toLowerCase();
 
     try {
+      /**
+       * Purchase Request to eSIMAccess
+       * We use 'packageCode' and 'locationCode' as per the eSimAccess DTC documentation.
+       */
       const esimResponse = await axios.post('https://api.esimaccess.com/order/v1/buy', {
         locationCode: planConfig.locationCode,
         packageCode: planConfig.packageCode,
@@ -94,7 +91,8 @@ export default async function handler(req, res) {
         status: 'completed',
         total: session.amount_total / 100,
         currency: 'USD',
-        activationCode: isSuccess ? (response.obj?.activationCode || 'PROVISIONED_VIA_EMAIL') : 'PROVISIONING_PENDING'
+        // Activation handled by carrier-side email fulfillment
+        activationCode: isSuccess ? 'PROVISIONED_VIA_EMAIL' : 'PROVISIONING_PENDING'
       });
 
     } catch (esimError) {
