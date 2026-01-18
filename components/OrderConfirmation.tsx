@@ -147,7 +147,7 @@ const OrderConfirmation: React.FC<OrderConfirmationProps> = ({ order, onBackToHo
                 Encryption Verified
               </div>
               <p className="text-[10px] font-medium text-slate-400 leading-relaxed">
-                To activate, navigate to <span className="text-slate-900 font-bold italic">Settings > Cellular > Add eSIM</span> and scan the code. Ensure you are connected to Wi-Fi.
+                To activate, navigate to <span className="text-slate-900 font-bold italic">Settings &gt; Cellular &gt; Add eSIM</span> and scan the code. Ensure you are connected to Wi-Fi.
               </p>
             </div>
           </div>
