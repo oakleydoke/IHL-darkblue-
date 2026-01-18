@@ -13,16 +13,6 @@ export interface ESimUsage {
   carrier: string;
 }
 
-export interface RawPackage {
-  packageCode: string;
-  packageName: string;
-  locationCode: string;
-  locationName: string;
-  dataAmount: string;
-  expiryDay: number;
-  price?: number;
-}
-
 export class ESimService extends ApiService {
   static async getOrderByStripeSession(sessionId: string): Promise<Order> {
     const response = await fetch(`${ENV.API_BASE_URL}/orders/verify-session?sessionId=${sessionId}`);
@@ -38,6 +28,7 @@ export class ESimService extends ApiService {
   }
 
   static async getUsageMetrics(iccid: string): Promise<ESimUsage> {
+    // Simulated production usage metrics
     return {
       iccid,
       totalVolume: 10737418240, // 10GB
@@ -54,15 +45,9 @@ export class ESimService extends ApiService {
     return data || [];
   }
 
-  static async getRawCatalog(): Promise<RawPackage[]> {
-    const response = await fetch(`${ENV.API_BASE_URL}/catalog/list`);
-    if (!response.ok) throw new Error('Catalog fetch failed');
-    const result = await response.json();
-    return result.obj?.list || [];
-  }
-
   static async getUserESims(email: string): Promise<any[]> {
     const normalizedEmail = email.toLowerCase().trim();
+    // Look up orders in the global ledger (localStorage database)
     const ledger = JSON.parse(localStorage.getItem('ihavelanded_orders') || '[]');
     
     return ledger
